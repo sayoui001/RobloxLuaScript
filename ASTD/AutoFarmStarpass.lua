@@ -216,5 +216,5 @@ if game.PlaceId == 4996049426 or game.PlaceId == 7785334488 then
     AutoJoin()
     PlaceUnit()
     AutoReplay()
-
+    syn.queue_on_teleport("loadstring(game:HttpGet('https://raw.githubusercontent.com/sayoui001/RobloxLuaScript/main/ASTD/AutoFarmStarpass.lua'))()")
 end
