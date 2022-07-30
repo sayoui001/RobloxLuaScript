@@ -205,7 +205,7 @@ if game.PlaceId == 4996049426 or game.PlaceId == 7785334488 then
                 end
                 wait(2)
                 gs:FireServer(unpack(inf))
-                wait(2)
+                wait(1)
                 gs:FireServer(unpack(start))
                 wait(15)
             end
