@@ -20,7 +20,7 @@ if game.PlaceId == 4996049426 or game.PlaceId == 7785334488 then
         [1] = "Summon",
         [2] = {
             ["Rotation"] = 0,
-            ["cframe"] = CFrame.new(Vector3.new(-22.2338924, 147.89859, -146.197418), Vector3.new(-0, -0, -1)),
+            ["cframe"] = CFrame.new(Vector3.new(-456.536682, 543.754272, -32.2358589), Vector3.new(-0, -0, -1)),
             ["Unit"] = "EXP IV"
         }
     }
@@ -29,7 +29,7 @@ if game.PlaceId == 4996049426 or game.PlaceId == 7785334488 then
         [1] = "Summon",
         [2] = {
             ["Rotation"] = 0,
-            ["cframe"] = CFrame.new(Vector3.new(-19.7601013, 147.89859, -146.010712), Vector3.new(-0, -0, -1)),
+            ["cframe"] = CFrame.new(Vector3.new(-454.494568, 543.754272, -32.288887), Vector3.new(-0, -0, -1)),
             ["Unit"] = "EXP IV"
         }
     }
@@ -38,7 +38,7 @@ if game.PlaceId == 4996049426 or game.PlaceId == 7785334488 then
         [1] = "Summon",
         [2] = {
             ["Rotation"] = 0,
-            ["cframe"] = CFrame.new(Vector3.new(7.69565487, 147.898544, -103.106163), Vector3.new(-0, -0, -1)),
+            ["cframe"] = CFrame.new(Vector3.new(-426.321289, 543.754272, 10.2921963), Vector3.new(-0, -0, -1)),
             ["Unit"] = "EXP IV"
         }
     }
@@ -47,7 +47,7 @@ if game.PlaceId == 4996049426 or game.PlaceId == 7785334488 then
         [1] = "Summon",
         [2] = {
             ["Rotation"] = 0,
-            ["cframe"] = CFrame.new(Vector3.new(36.6010399, 147.898544, -103.24054), Vector3.new(-0, -0, -1)),
+            ["cframe"] = CFrame.new(Vector3.new(-397.45343, 543.754272, 10.3137512), Vector3.new(-0, -0, -1)),
             ["Unit"] = "EXP IV"
         }
     }
@@ -56,7 +56,7 @@ if game.PlaceId == 4996049426 or game.PlaceId == 7785334488 then
         [1] = "Summon",
         [2] = {
             ["Rotation"] = 0,
-            ["cframe"] = CFrame.new(Vector3.new(-14.2545605, 147.898499, -87.3711166), Vector3.new(-0, -0, -1)),
+            ["cframe"] = CFrame.new(Vector3.new(-353.403473, 543.754272, -21.5928078), Vector3.new(-0, -0, -1)),
             ["Unit"] = "EXP IV"
         }
     }
@@ -65,7 +65,7 @@ if game.PlaceId == 4996049426 or game.PlaceId == 7785334488 then
         [1] = "Summon",
         [2] = {
             ["Rotation"] = 0,
-            ["cframe"] = CFrame.new(Vector3.new(4.87790585, 147.898544, -90.290741), Vector3.new(-0, -0, -1)),
+            ["cframe"] = CFrame.new(Vector3.new(353.491425, 543.754272, 7.40249538), Vector3.new(-0, -0, -1)),
             ["Unit"] = "EXP IV"
         }
     }
@@ -74,7 +74,7 @@ if game.PlaceId == 4996049426 or game.PlaceId == 7785334488 then
         [1] = "Summon",
         [2] = {
             ["Rotation"] = 0,
-            ["cframe"] = CFrame.new(Vector3.new(-14.3309078, 147.898499, -68.2787628), Vector3.new(-0, -0, -1)),
+            ["cframe"] = CFrame.new(Vector3.new(-410.436615, 543.754272, -21.7114944), Vector3.new(-0, -0, -1)),
             ["Unit"] = "EXP IV"
         }
     }
@@ -83,7 +83,7 @@ if game.PlaceId == 4996049426 or game.PlaceId == 7785334488 then
         [1] = "Summon",
         [2] = {
             ["Rotation"] = 0,
-            ["cframe"] = CFrame.new(Vector3.new(39.8213234, 147.898544, -88.4201508), Vector3.new(-0, -0, -1)),
+            ["cframe"] = CFrame.new(Vector3.new(-436.38446, 543.754272, -12.878746), Vector3.new(-0, -0, -1)),
             ["Unit"] = "EXP IV"
         }
     }
