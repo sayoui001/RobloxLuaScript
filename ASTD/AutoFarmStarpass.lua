@@ -89,7 +89,7 @@ if game.PlaceId == 4996049426 or game.PlaceId == 7785334488 then
                 local cwave = game:GetService("Players").LocalPlayer.PlayerGui.HUD.Wave.Text
                 local owave = tonumber(string.match(cwave, '%S+$'))
                 if owave == 18 then
-                    wait(12)
+                    wait(15)
                     gs:FireServer(unpack(sGenos))
                     break
                 end
