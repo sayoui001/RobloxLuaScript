@@ -114,18 +114,17 @@ if game.PlaceId == 4996049426 or game.PlaceId == 7785334488 then
         end)
     end
 
-    local start = {
-    [1] = "InfiniteModeStart"
-    }
-
-    local inf = {
-        [1] = "InfiniteModeInfLevel",
-        [2] = "-1.7",
-        [3] = false
-    }
-
     function AutoJoin()
         spawn(function()
+            local start = {
+            [1] = "InfiniteModeStart"
+            }
+
+            local inf = {
+                [1] = "InfiniteModeInfLevel",
+                [2] = "-1.7",
+                [3] = false
+            }
             while _G.AutoStarPass == true do
                 if game.PlaceId == 4996049426 then
                     game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.CFrame = game:GetService("Workspace").Queue.Infinite.InfiniteMode.CFrame 
@@ -141,7 +140,7 @@ if game.PlaceId == 4996049426 or game.PlaceId == 7785334488 then
             end
         end)
     end
-    
+
     if _G.AutoStarPass == true then
         for _, v in pairs(game:GetService("Workspace"):GetChildren()) do
             if v.Name == "Queue" then
@@ -163,6 +162,7 @@ if game.PlaceId == 4996049426 or game.PlaceId == 7785334488 then
                         local tempo = string.format("%.0f Seconds",seconds)
                         local tier = game:GetService("Players").LocalPlayer.PlayerGui.TowerPassRewards.Main.Header.Wrapper.Tier.Wrapper.Container.TierNumber.Text
                         local wave = game:GetService("Players").LocalPlayer.PlayerGui.HUD.Wave.Text
+                        local waves = string.match(wave, '%S+$')
                         local data = {
                             ["content"] = "",
                             ["embeds"] = {
@@ -181,7 +181,7 @@ if game.PlaceId == 4996049426 or game.PlaceId == 7785334488 then
                                         },
                                         {
                                             ["name"] = "**Wave**",
-                                            ["value"] = wave ,
+                                            ["value"] = waves ,
                                             ["inline"] = true
                                         },
                                         {
