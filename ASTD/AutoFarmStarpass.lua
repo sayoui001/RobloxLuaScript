@@ -143,8 +143,6 @@ if game.PlaceId == 4996049426 or game.PlaceId == 7785334488 then
         end)
     end
     
-    
-
     if _G.AutoStarPass == true then
         for _, v in pairs(game:GetService("Workspace"):GetChildren()) do
             if v.Name == "Queue" then
@@ -234,6 +232,5 @@ if game.PlaceId == 4996049426 or game.PlaceId == 7785334488 then
         UserInputService.WindowFocused:Connect(WindowFocusedFunction)
         return
     end
-
     Initialize()
 end
