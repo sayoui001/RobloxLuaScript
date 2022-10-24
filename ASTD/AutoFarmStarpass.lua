@@ -3,8 +3,6 @@ repeat
 until game:IsLoaded()
 wait(3)
 if game.PlaceId == 4996049426 or game.PlaceId == 7785334488 then
-    _G.AutoStarPass = true
-    _G.AutoEvo = false
 
     local gs = game:GetService("ReplicatedStorage").Remotes.Input
     local UserInputService = game:GetService("UserInputService")
@@ -156,62 +154,55 @@ if game.PlaceId == 4996049426 or game.PlaceId == 7785334488 then
                 UpgradeUnit()
                 SellUnit()
                 AutoReplay()
-                break
-            end
-        end
-    end
-
-    local url = _G.WebhookUrl
-
-    for _, v in pairs(game:GetService("Workspace"):GetChildren()) do
-        if v.Name == "Placeable" then
-            game:GetService("Players").LocalPlayer.OnTeleport:Connect(function(State)
-                if State == Enum.TeleportState.Started then
-                    local scripttime = game.Workspace.DistributedGameTime
-                    local seconds = scripttime
-                    local tempo = string.format("%.0f Seconds",seconds)
-                    local tier = game:GetService("Players").LocalPlayer.PlayerGui.TowerPassRewards.Main.Header.Wrapper.Tier.Wrapper.Container.TierNumber.Text
-                    local wave = game:GetService("Players").LocalPlayer.PlayerGui.HUD.Wave.Text
-                    local data = {
-                        ["content"] = "",
-                        ["embeds"] = {
-                            {
-                                ["title"] = "**STAR PASS FARM NOTIFIER**",
-                                ["description"] = "**Username : **||"..game.Players.LocalPlayer.Name.."||",
-                                ["thumbnail"] = {
-                                    ["url"] = "https://tr.rbxcdn.com/56f0555ff8fe6322c0e687128bdd8ddc/150/150/Image/Png"},
-                                ["type"] = "rich",
-                                ["color"] = tonumber(0x7269da),
-                                ["fields"] = {
-                                    {
-                                        ["name"] = "**Time Elapsed**",
-                                        ["value"] = tempo ,
-                                        ["inline"] = true
-                                    },
-                                    {
-                                        ["name"] = "**Wave**",
-                                        ["value"] = wave ,
-                                        ["inline"] = true
-                                    },
-                                    {
-                                        ["name"] = "**Tier**",
-                                        ["value"] = tier ,
-                                        ["inline"] = true
+                game:GetService("Players").LocalPlayer.OnTeleport:Connect(function(State)
+                    if State == Enum.TeleportState.Started then
+                        local url = _G.WebhookUrl
+                        local scripttime = game.Workspace.DistributedGameTime
+                        local seconds = scripttime
+                        local tempo = string.format("%.0f Seconds",seconds)
+                        local tier = game:GetService("Players").LocalPlayer.PlayerGui.TowerPassRewards.Main.Header.Wrapper.Tier.Wrapper.Container.TierNumber.Text
+                        local wave = game:GetService("Players").LocalPlayer.PlayerGui.HUD.Wave.Text
+                        local data = {
+                            ["content"] = "",
+                            ["embeds"] = {
+                                {
+                                    ["title"] = "**STAR PASS FARM NOTIFIER**",
+                                    ["description"] = "**Username : **||"..game.Players.LocalPlayer.Name.."||",
+                                    ["thumbnail"] = {
+                                        ["url"] = "https://tr.rbxcdn.com/56f0555ff8fe6322c0e687128bdd8ddc/150/150/Image/Png"},
+                                    ["type"] = "rich",
+                                    ["color"] = tonumber(0x7269da),
+                                    ["fields"] = {
+                                        {
+                                            ["name"] = "**Time Elapsed**",
+                                            ["value"] = tempo ,
+                                            ["inline"] = true
+                                        },
+                                        {
+                                            ["name"] = "**Wave**",
+                                            ["value"] = wave ,
+                                            ["inline"] = true
+                                        },
+                                        {
+                                            ["name"] = "**Tier**",
+                                            ["value"] = tier ,
+                                            ["inline"] = true
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
-                    local newdata = game:GetService("HttpService"):JSONEncode(data)
-                    local headers = {
-                    ["content-type"] = "application/json"
-                    }
-                    request = http_request or request or HttpPost or syn.request
-                    local Webhook = {Url = url, Body = newdata, Method = "POST", Headers = headers}
-                    request(Webhook)
-                end
-            end)    
-            break
+                        local newdata = game:GetService("HttpService"):JSONEncode(data)
+                        local headers = {
+                        ["content-type"] = "application/json"
+                        }
+                        request = http_request or request or HttpPost or syn.request
+                        local Webhook = {Url = url, Body = newdata, Method = "POST", Headers = headers}
+                        request(Webhook)
+                    end
+                end)
+                break
+            end
         end
     end
 
