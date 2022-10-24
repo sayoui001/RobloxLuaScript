@@ -1,0 +1,56 @@
+repeat wait() until game:IsLoaded() 
+wait(3)
+local url = _G.WebhookUrl
+for _, v in pairs(game:GetService("Workspace"):GetChildren()) do
+    if v.Name == "Hill12" then
+        game:GetService("Players").LocalPlayer.OnTeleport:Connect(function(State)
+            if State == Enum.TeleportState.Started then
+                local scripttime = game.Workspace.DistributedGameTime
+                local seconds = scripttime
+                local tempo = string.format("%.0f Seconds",seconds)
+                local candy = game:GetService("Players").LocalPlayer.PlayerGui.HUD.CandyShop.CandyAmount.Text
+                local candies = string.match(candy, '%S+$')
+                local wave = game:GetService("Players").NickZaKung.PlayerGui.HUD.Wave.Text
+                local stage = string.match(wave, '%S+$')
+                local data = {
+                    ["content"] = "",
+                    ["embeds"] = {
+                        {
+                            ["title"] = "**CANDY FARM NOTIFIER**",
+                            ["description"] = "**Username : **||"..game.Players.LocalPlayer.Name.."||",
+                            ["thumbnail"] = {
+                                ["url"] = "https://tr.rbxcdn.com/56f0555ff8fe6322c0e687128bdd8ddc/150/150/Image/Png"},
+                            ["type"] = "rich",
+                            ["color"] = tonumber(0x7269da),
+                            ["fields"] = {
+                                {
+                                    ["name"] = "**Time Elapsed**",
+                                    ["value"] = tempo ,
+                                    ["inline"] = true
+                                },
+                                {
+                                    ["name"] = "**Candy**",
+                                    ["value"] = candies ,
+                                    ["inline"] = true
+                                },
+                                {
+                                    ["name"] = "**Stage**",
+                                    ["value"] = stage ,
+                                    ["inline"] = true
+                                }
+                            }
+                        }
+                    }
+                }
+                local newdata = game:GetService("HttpService"):JSONEncode(data)
+                local headers = {
+                   ["content-type"] = "application/json"
+                }
+                request = http_request or request or HttpPost or syn.request
+                local Webhook = {Url = url, Body = newdata, Method = "POST", Headers = headers}
+                request(Webhook)
+            end
+        end)    
+        break
+    end
+end
