@@ -29,13 +29,13 @@ for _, v in pairs(game:GetService("Workspace"):GetChildren()) do
                                     ["inline"] = true
                                 },
                                 {
-                                    ["name"] = "**Candy**",
-                                    ["value"] = candies ,
+                                    ["name"] = "**Stage**",
+                                    ["value"] = stage ,
                                     ["inline"] = true
                                 },
                                 {
-                                    ["name"] = "**Stage**",
-                                    ["value"] = stage ,
+                                    ["name"] = "**Candy**",
+                                    ["value"] = candies ,
                                     ["inline"] = true
                                 }
                             }
