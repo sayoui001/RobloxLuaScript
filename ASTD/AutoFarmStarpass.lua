@@ -130,7 +130,7 @@ if game.PlaceId == 4996049426 or game.PlaceId == 7785334488 then
                     game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.CFrame = game:GetService("Workspace").Queue.Infinite.InfiniteMode.CFrame 
                 end
                 if game.PlaceId == 7785334488 then
-                    game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.CFrame = game:GetService("Workspace").Queue.Joinables.InfiniteMode.CFrame
+                    game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.CFrame = game:GetService("Workspace").Queue.Joinables.InfiniteMode1.CFrame
                 end
                 wait(1)
                 gs:FireServer(unpack(inf))
