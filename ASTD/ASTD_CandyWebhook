@@ -10,7 +10,7 @@ for _, v in pairs(game:GetService("Workspace"):GetChildren()) do
                 local tempo = string.format("%.0f Seconds",seconds)
                 local candy = game:GetService("Players").LocalPlayer.PlayerGui.HUD.CandyShop.CandyAmount.Text
                 local candies = string.match(candy, '%S+$')
-                local wave = game:GetService("Players").NickZaKung.PlayerGui.HUD.Wave.Text
+                local wave = game:GetService("Players").LocalPlayer.PlayerGui.HUD.Wave.Text
                 local stage = string.match(wave, '%S+$')
                 local data = {
                     ["content"] = "",
