@@ -1,106 +1,221 @@
 repeat
     wait()
 until game:IsLoaded()
-wait(5)
+wait(3)
 if game.PlaceId == 4996049426 or game.PlaceId == 7785334488 then
     _G.AutoStarPass = true
-    _G.AutoEvo = true
-  
-    local EX = {
-        [1] = "VoteGameMode",
-        [2] = "Extreme"
-    }
-
-    local FW = {
-        [1] = "SpeedChange",
-        [2] = true
-    }
-
-    local POS1 = {
-        [1] = "Summon",
-        [2] = {
-            ["Rotation"] = 0,
-            ["cframe"] = CFrame.new(Vector3.new(-456.536682, 543.754272, -32.2358589), Vector3.new(-0, -0, -1)),
-            ["Unit"] = "EXP IV"
-        }
-    }
-
-    local POS2 = {
-        [1] = "Summon",
-        [2] = {
-            ["Rotation"] = 0,
-            ["cframe"] = CFrame.new(Vector3.new(-454.494568, 543.754272, -32.288887), Vector3.new(-0, -0, -1)),
-            ["Unit"] = "EXP IV"
-        }
-    }
-
-    local POS3 = {
-        [1] = "Summon",
-        [2] = {
-            ["Rotation"] = 0,
-            ["cframe"] = CFrame.new(Vector3.new(-426.321289, 543.754272, 10.2921963), Vector3.new(-0, -0, -1)),
-            ["Unit"] = "EXP IV"
-        }
-    }
-
-    local POS4 = {
-        [1] = "Summon",
-        [2] = {
-            ["Rotation"] = 0,
-            ["cframe"] = CFrame.new(Vector3.new(-397.45343, 543.754272, 10.3137512), Vector3.new(-0, -0, -1)),
-            ["Unit"] = "EXP IV"
-        }
-    }
-
-    local POS5 = {
-        [1] = "Summon",
-        [2] = {
-            ["Rotation"] = 0,
-            ["cframe"] = CFrame.new(Vector3.new(-353.403473, 543.754272, -21.5928078), Vector3.new(-0, -0, -1)),
-            ["Unit"] = "EXP IV"
-        }
-    }
-
-    local POS6 = {
-        [1] = "Summon",
-        [2] = {
-            ["Rotation"] = 0,
-            ["cframe"] = CFrame.new(Vector3.new(353.491425, 543.754272, 7.40249538), Vector3.new(-0, -0, -1)),
-            ["Unit"] = "EXP IV"
-        }
-    }
-
-    local POS7 = {
-        [1] = "Summon",
-        [2] = {
-            ["Rotation"] = 0,
-            ["cframe"] = CFrame.new(Vector3.new(-410.436615, 543.754272, -21.7114944), Vector3.new(-0, -0, -1)),
-            ["Unit"] = "EXP IV"
-        }
-    }
-
-    local POS8 = {
-        [1] = "Summon",
-        [2] = {
-            ["Rotation"] = 0,
-            ["cframe"] = CFrame.new(Vector3.new(-436.38446, 543.754272, -12.878746), Vector3.new(-0, -0, -1)),
-            ["Unit"] = "EXP IV"
-        }
-    }
-
-    local vim = game:GetService("VirtualInputManager")
-
-    function click(x, y, button)
-        spawn(function()
-            button -= 1
-            vim:SendMouseButtonEvent(x, y, button, true, game, 0)
-            vim:SendMouseButtonEvent(x, y, button, false, game, 0)
-        end)
-    end
+    _G.AutoEvo = false
 
     local gs = game:GetService("ReplicatedStorage").Remotes.Input
     local UserInputService = game:GetService("UserInputService")
     local RunService = game:GetService("RunService")
+
+    function EvoEXP()
+        spawn(function()
+            local EXP4 = { [1] = "UpgradeUnit" ,[2] = "EXP III" ,[3] = 2 }
+            local EXP3 = { [1] = "UpgradeUnit" ,[2] = "EXP II"  ,[3] = 2 }
+            local EXP2 = { [1] = "UpgradeUnit" ,[2] = "EXP I"   ,[3] = 2 }
+            while _G.AutoEvo == true do
+                gs:FireServer(unpack(EXP4))
+                wait(0.25)
+                gs:FireServer(unpack(EXP3))
+                wait(0.25)
+                gs:FireServer(unpack(EXP4))
+                wait(0.25)
+                gs:FireServer(unpack(EXP2))
+                wait(0.25)
+                if not _G.AutoEvo then break end
+            end
+        end)
+    end
+
+    function PlaceUnit()
+        spawn(function()
+            local EX = {
+                [1] = "VoteGameMode",
+                [2] = "Extreme"
+            }
+        
+            local FW = {
+                [1] = "SpeedChange",
+                [2] = true
+            }
+        
+            local pGenos = {
+                [1] = "Summon",
+                [2] = {
+                    ["Rotation"] = 0,
+                    ["cframe"] = CFrame.new(Vector3.new(-412.356, 596.409, 24.767), Vector3.new(-0, -0, -1)),
+                    ["Unit"] = "Genos [Overdrive]"
+                }
+            }
+            local i = 1
+            while _G.AutoStarPass == true do
+                RunService:Set3dRenderingEnabled(false)
+                gs:FireServer(unpack(EX))
+                wait(1)
+                gs:FireServer(unpack(FW))
+                wait(1)
+                gs:FireServer(unpack(pGenos))
+                wait(1)
+                i = i + 1 
+                if i > 9 then break end
+            end
+        end)
+    end
+
+    function UpgradeUnit()
+        spawn(function()
+            local uGenos = {
+                [1] = "Upgrade",
+                [2] = workspace.Unit:FindFirstChild("Genos [Overdrive]")
+            }
+            while _G.AutoStarPass == true do
+                if game:GetService("Workspace").Unit["Genos [Overdrive]"].UpgradeTag.Value == 3 then
+                    break
+                end                
+                wait(3)
+                game:GetService("ReplicatedStorage").Remotes.Server:InvokeServer(unpack(uGenos))
+            end
+        end)
+    end
+
+    function SellUnit()
+        spawn(function()
+            local sGenos = {
+                [1] = "Sell",
+                [2] = workspace.Unit:FindFirstChild("Genos [Overdrive]")
+            }
+            while _G.AutoStarPass == true do
+                wait(2)
+                local cwave = game:GetService("Players").LocalPlayer.PlayerGui.HUD.Wave.Text
+                local owave = tonumber(string.match(cwave, '%S+$'))
+                if owave == 19 then
+                    gs:FireServer(unpack(sGenos))
+                    break
+                end
+            end
+        end)
+    end
+    
+    function AutoReplay()
+        spawn(function()
+            local function click(a)
+                game:GetService("VirtualInputManager"):SendMouseButtonEvent(a.AbsolutePosition.X+a.AbsoluteSize.X/2,a.AbsolutePosition.Y+50,0,true,a,1)
+                game:GetService("VirtualInputManager"):SendMouseButtonEvent(a.AbsolutePosition.X+a.AbsoluteSize.X/2,a.AbsolutePosition.Y+50,0,false,a,1)
+            end
+            while _G.AutoStarPass == true do
+                wait(2)
+                for _, v in pairs(game:GetService("Players").LocalPlayer.PlayerGui:GetChildren()) do
+                    if v.Name == "MissionEndNavigateDialog" then
+                        click(game:GetService("Players").LocalPlayer.PlayerGui.MissionEndNavigateDialog.TextFrame.Replay)
+                    end
+                end
+            end
+        end)
+    end
+
+    local start = {
+    [1] = "InfiniteModeStart"
+    }
+
+    local inf = {
+        [1] = "InfiniteModeInfLevel",
+        [2] = "-1.7",
+        [3] = false
+    }
+
+    function AutoJoin()
+        spawn(function()
+            while _G.AutoStarPass == true do
+                if game.PlaceId == 4996049426 then
+                    game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.CFrame = game:GetService("Workspace").Queue.Infinite.InfiniteMode.CFrame 
+                end
+                if game.PlaceId == 7785334488 then
+                    game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.CFrame = game:GetService("Workspace").Queue.Joinables.InfiniteMode.CFrame
+                end
+                wait(1)
+                gs:FireServer(unpack(inf))
+                wait(1)
+                gs:FireServer(unpack(start))
+                wait(15)
+            end
+        end)
+    end
+    
+    
+
+    if _G.AutoStarPass == true then
+        for _, v in pairs(game:GetService("Workspace"):GetChildren()) do
+            if v.Name == "Queue" then
+                EvoEXP()
+                AutoJoin()
+                break
+            end
+            if v.Name == "Placeable" then
+                PlaceUnit()
+                wait(15)
+                UpgradeUnit()
+                SellUnit()
+                AutoReplay()
+                break
+            end
+        end
+    end
+
+    local url = _G.WebhookUrl
+
+    for _, v in pairs(game:GetService("Workspace"):GetChildren()) do
+        if v.Name == "Placeable" then
+            game:GetService("Players").LocalPlayer.OnTeleport:Connect(function(State)
+                if State == Enum.TeleportState.Started then
+                    local scripttime = game.Workspace.DistributedGameTime
+                    local seconds = scripttime
+                    local tempo = string.format("%.0f Seconds",seconds)
+                    local tier = game:GetService("Players").LocalPlayer.PlayerGui.TowerPassRewards.Main.Header.Wrapper.Tier.Wrapper.Container.TierNumber.Text
+                    local wave = game:GetService("Players").LocalPlayer.PlayerGui.HUD.Wave.Text
+                    local data = {
+                        ["content"] = "",
+                        ["embeds"] = {
+                            {
+                                ["title"] = "**STAR PASS FARM NOTIFIER**",
+                                ["description"] = "**Username : **||"..game.Players.LocalPlayer.Name.."||",
+                                ["thumbnail"] = {
+                                    ["url"] = "https://tr.rbxcdn.com/56f0555ff8fe6322c0e687128bdd8ddc/150/150/Image/Png"},
+                                ["type"] = "rich",
+                                ["color"] = tonumber(0x7269da),
+                                ["fields"] = {
+                                    {
+                                        ["name"] = "**Time Elapsed**",
+                                        ["value"] = tempo ,
+                                        ["inline"] = true
+                                    },
+                                    {
+                                        ["name"] = "**Wave**",
+                                        ["value"] = wave ,
+                                        ["inline"] = true
+                                    },
+                                    {
+                                        ["name"] = "**Tier**",
+                                        ["value"] = tier ,
+                                        ["inline"] = true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    local newdata = game:GetService("HttpService"):JSONEncode(data)
+                    local headers = {
+                    ["content-type"] = "application/json"
+                    }
+                    request = http_request or request or HttpPost or syn.request
+                    local Webhook = {Url = url, Body = newdata, Method = "POST", Headers = headers}
+                    request(Webhook)
+                end
+            end)    
+            break
+        end
+    end
 
     local WindowFocusReleasedFunction = function()
         RunService:Set3dRenderingEnabled(false)
@@ -120,100 +235,5 @@ if game.PlaceId == 4996049426 or game.PlaceId == 7785334488 then
         return
     end
 
-    local EXP4 = { [1] = "UpgradeUnit" ,[2] = "EXP III" ,[3] = 2 }
-    local EXP3 = { [1] = "UpgradeUnit" ,[2] = "EXP II"  ,[3] = 2 }
-    local EXP2 = { [1] = "UpgradeUnit" ,[2] = "EXP I"   ,[3] = 2 }
-    
-    local start = {
-    [1] = "Start"
-    }
-
-    local inf = {
-        [1] = "InfLevel",
-        [2] = "-1.7",
-        [3] = false
-    }
-
     Initialize()
-
-    function EvoEXP()
-        spawn(function()
-            while _G.AutoEvo == true do
-                gs:FireServer(unpack(EXP4))
-                wait(0.25)
-                gs:FireServer(unpack(EXP3))
-                wait(0.25)
-                gs:FireServer(unpack(EXP4))
-                wait(0.25)
-                gs:FireServer(unpack(EXP2))
-                wait(0.25)
-                if not _G.AutoEvo then break end
-            end
-        end)
-    end
-
-    function PlaceUnit()
-        spawn(function()
-            local i = 1
-            while _G.AutoStarPass == true do
-                RunService:Set3dRenderingEnabled(false)
-                gs:FireServer(unpack(EX))
-                wait(1)
-                gs:FireServer(unpack(FW))
-                wait(1)
-                gs:FireServer(unpack(POS1))
-                wait(1)
-                gs:FireServer(unpack(POS2))
-                wait(1)
-                gs:FireServer(unpack(POS3))
-                wait(1)
-                gs:FireServer(unpack(POS4))
-                wait(1)
-                gs:FireServer(unpack(POS5))
-                wait(1)
-                gs:FireServer(unpack(POS6))
-                wait(1)
-                gs:FireServer(unpack(POS7))
-                wait(1)
-                gs:FireServer(unpack(POS8))
-                wait(1)
-                i = i + 1 
-                if i > 9 then break end
-            end
-        end)
-    end
-
-    function AutoReplay()
-        spawn(function()
-            while _G.AutoStarPass == true do
-                click(750, 550, 1)
-                wait(1)
-                click(1870, 1030, 1)
-                wait(1)
-            end
-        end)
-    end
-
-    function AutoJoin()
-        spawn(function()
-            while _G.AutoStarPass == true do
-                if game.PlaceId == 4996049426 then
-                    game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.CFrame = game:GetService("Workspace").Queue.Infinite.InfiniteMode.CFrame 
-                end
-                if game.PlaceId == 7785334488 then
-                    game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.CFrame = game:GetService("Workspace").Queue.Joinables.InfiniteMode.CFrame
-                end
-                wait(2)
-                gs:FireServer(unpack(inf))
-                wait(1)
-                gs:FireServer(unpack(start))
-                wait(15)
-            end
-        end)
-    end
-
-    EvoEXP()
-    AutoJoin()
-    PlaceUnit()
-    AutoReplay()
 end
