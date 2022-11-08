@@ -116,27 +116,42 @@ if game.PlaceId == 4996049426 or game.PlaceId == 7785334488 then
 
     function AutoJoin()
         spawn(function()
-            local start = {
-            [1] = "InfiniteMode1Start"
+            local startw1 = {
+                [1] = "InfiniteMode1Start"
             }
 
-            local inf = {
+            local infw1 = {
                 [1] = "InfiniteMode1InfLevel",
                 [2] = "-1.7",
                 [3] = false
             }
+            local startw2 = {
+                [1] = "InfiniteModeStart"
+            }
+
+            local infw2 = {
+                [1] = "InfiniteModeInfLevel",
+                [2] = "-1.7",
+                [3] = false
+            }    
             while _G.AutoStarPass == true do
                 if game.PlaceId == 4996049426 then
                     game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.CFrame = game:GetService("Workspace").Queue.Infinite.InfiniteMode1.CFrame 
+                    wait(1)
+                    gs:FireServer(unpack(infw1))
+                    wait(1)
+                    gs:FireServer(unpack(startw1))
+                    wait(15)
                 end
                 if game.PlaceId == 7785334488 then
-                    game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.CFrame = game:GetService("Workspace").Queue.Joinables.InfiniteMode1.CFrame
+                    game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.CFrame = game:GetService("Workspace").Queue.Joinables.InfiniteMode.CFrame
+                    wait(1)
+                    gs:FireServer(unpack(infw2))
+                    wait(1)
+                    gs:FireServer(unpack(startw2))
+                    wait(15)
                 end
-                wait(1)
-                gs:FireServer(unpack(inf))
-                wait(1)
-                gs:FireServer(unpack(start))
-                wait(15)
+
             end
         end)
     end
