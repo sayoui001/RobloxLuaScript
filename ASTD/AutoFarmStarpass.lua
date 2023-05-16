@@ -116,7 +116,7 @@ if game.PlaceId == 4996049426 or game.PlaceId == 7785334488 then
                     game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.CFrame = game:GetService("Workspace").Queue.Infinite.InfiniteMode1.CFrame 
                 end
                 if game.PlaceId == 7785334488 then
-                    game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.CFrame = workspace.Queue["Lobby World 2"].Infinite.Props["Corp SpaceShip"].Door["Door Base"].CFrame
+                    game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.CFrame = game:GetService("Workspace").Queue["Lobby World 2"].Infinite.Props["Corp SpaceShip"].Door["Door Base"].CFrame
                     wait(3)    
                     game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.CFrame = game:GetService("Workspace").Queue.Joinables.InfiniteMode1.CFrame
                 end
@@ -125,6 +125,61 @@ if game.PlaceId == 4996049426 or game.PlaceId == 7785334488 then
                 wait(1)
                 gs:FireServer(unpack(start))
                 wait(15)
+            end
+        end)
+    end
+    
+    function SendWebhook()
+        spawn(function()
+            while _G.AutoStarPass == true do
+                wait(5)
+                if game:GetService("Workspace").TowerHP.HP < 0 then
+                    local url = _G.WebhookUrl
+                    local scripttime = game.Workspace.DistributedGameTime
+                    local seconds = scripttime
+                    local tempo = string.format("%.0f Seconds",seconds)
+                    local tier = game:GetService("Players").LocalPlayer.PlayerGui.TowerPassRewards.Main.Header.Wrapper.Tier.Wrapper.Container.TierNumber.Text
+                    local wave = game:GetService("Players").LocalPlayer.PlayerGui.HUD.Wave.Text
+                    local waves = string.match(wave, '%S+$')
+                    local data = {
+                        ["content"] = "",
+                        ["embeds"] = {
+                            {
+                                ["title"] = "**STAR PASS FARM NOTIFIER**",
+                                ["description"] = "**Username : **||"..game.Players.LocalPlayer.Name.."||",
+                                ["thumbnail"] = {
+                                    ["url"] = "https://tr.rbxcdn.com/3f4796041be7f675b8edbd3c26592bd2/150/150/Image/Png"},
+                                ["type"] = "rich",
+                                ["color"] = tonumber(0x7269da),
+                                ["fields"] = {
+                                    {
+                                        ["name"] = "**Time Elapsed**",
+                                        ["value"] = tempo ,
+                                        ["inline"] = true
+                                    },
+                                    {
+                                        ["name"] = "**Wave**",
+                                        ["value"] = waves ,
+                                        ["inline"] = true
+                                    },
+                                     {
+                                        ["name"] = "**Tier**",
+                                        ["value"] = tier ,
+                                        ["inline"] = true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    local newdata = game:GetService("HttpService"):JSONEncode(data)
+                    local headers = {
+                        ["content-type"] = "application/json"
+                    }
+                    request = http_request or request or HttpPost or syn.request
+                    local Webhook = {Url = url, Body = newdata, Method = "POST", Headers = headers}
+                    request(Webhook)
+                    break
+                end
             end
         end)
     end
@@ -142,54 +197,7 @@ if game.PlaceId == 4996049426 or game.PlaceId == 7785334488 then
                 UpgradeUnit()
                 SellUnit()
                 AutoReplay()
-                game:GetService("Players").LocalPlayer.OnTeleport:Connect(function(State)
-                    if State == Enum.TeleportState.Started then
-                        local url = _G.WebhookUrl
-                        local scripttime = game.Workspace.DistributedGameTime
-                        local seconds = scripttime
-                        local tempo = string.format("%.0f Seconds",seconds)
-                        local tier = game:GetService("Players").LocalPlayer.PlayerGui.TowerPassRewards.Main.Header.Wrapper.Tier.Wrapper.Container.TierNumber.Text
-                        local wave = game:GetService("Players").LocalPlayer.PlayerGui.HUD.Wave.Text
-                        local waves = string.match(wave, '%S+$')
-                        local data = {
-                            ["content"] = "",
-                            ["embeds"] = {
-                                {
-                                    ["title"] = "**STAR PASS FARM NOTIFIER**",
-                                    ["description"] = "**Username : **||"..game.Players.LocalPlayer.Name.."||",
-                                    ["thumbnail"] = {
-                                        ["url"] = "https://tr.rbxcdn.com/56f0555ff8fe6322c0e687128bdd8ddc/150/150/Image/Png"},
-                                    ["type"] = "rich",
-                                    ["color"] = tonumber(0x7269da),
-                                    ["fields"] = {
-                                        {
-                                            ["name"] = "**Time Elapsed**",
-                                            ["value"] = tempo ,
-                                            ["inline"] = true
-                                        },
-                                        {
-                                            ["name"] = "**Wave**",
-                                            ["value"] = waves ,
-                                            ["inline"] = true
-                                        },
-                                        {
-                                            ["name"] = "**Tier**",
-                                            ["value"] = tier ,
-                                            ["inline"] = true
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        local newdata = game:GetService("HttpService"):JSONEncode(data)
-                        local headers = {
-                        ["content-type"] = "application/json"
-                        }
-                        request = http_request or request or HttpPost or syn.request
-                        local Webhook = {Url = url, Body = newdata, Method = "POST", Headers = headers}
-                        request(Webhook)
-                    end
-                end)
+                SendWebhook()
                 break
             end
         end
