@@ -36,7 +36,7 @@ if game.PlaceId == 4996049426 or game.PlaceId == 7785334488 then
                 if game:GetService("Players").LocalPlayer.PlayerGui.HUD.FastForward.TextLabel.Text == ("1X") then
                     gs:FireServer(unpack(FW))
                 end
-                elseif game:GetService("Players").LocalPlayer.PlayerGui.HUD.FastForward.TextLabel.Text == ("2X") and _G.x3 == true then
+                elseif game:GetService("Players").LocalPlayer.PlayerGui.HUD.FastForward.TextLabel.Text == ("2X") and _G.AutoX3 == true then
                     gs:FireServer(unpack(FW))
                 end
                 wait(1)
