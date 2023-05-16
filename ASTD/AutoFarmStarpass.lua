@@ -91,7 +91,7 @@ if game.PlaceId == 4996049426 or game.PlaceId == 7785334488 then
             end
             while _G.AutoStarPass == true do
                 wait(2)
-                for _, v in pairs(game:GetService("Players").LocalPlayer.PlayerGui:GetChildren()) do
+                for _, v in pairs(game:GetService("Players").LocalPlayer.PlayerGui.HUD:GetChildren()) do
                     if v.Name == "MissionEnd" then
                         click(game:GetService("Players").LocalPlayer.PlayerGui.HUD.MissionEnd.BG.Actions.Replay)
                     end
@@ -117,7 +117,7 @@ if game.PlaceId == 4996049426 or game.PlaceId == 7785334488 then
                 end
                 if game.PlaceId == 7785334488 then
                     game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.CFrame = workspace.Queue["Lobby World 2"].Infinite.Props["Corp SpaceShip"].Door["Door Base"].CFrame
-                        wait(3)    
+                    wait(3)    
                     game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.CFrame = game:GetService("Workspace").Queue.Joinables.InfiniteMode1.CFrame
                 end
                 wait(1)
