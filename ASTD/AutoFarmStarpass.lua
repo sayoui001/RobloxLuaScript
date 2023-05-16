@@ -102,11 +102,11 @@ if game.PlaceId == 4996049426 or game.PlaceId == 7785334488 then
     function AutoJoin()
         spawn(function()
             local start = {
-            [1] = "InfiniteModeStart"
+            [1] = "InfiniteMode1Start"
             }
 
             local inf = {
-                [1] = "InfiniteModeInfLevel",
+                [1] = "InfiniteMode1InfLevel",
                 [2] = "-1.7",
                 [3] = false
             }
