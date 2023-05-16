@@ -92,8 +92,8 @@ if game.PlaceId == 4996049426 or game.PlaceId == 7785334488 then
             while _G.AutoStarPass == true do
                 wait(2)
                 for _, v in pairs(game:GetService("Players").LocalPlayer.PlayerGui:GetChildren()) do
-                    if v.Name == "MissionEndNavigateDialog" then
-                        click(game:GetService("Players").LocalPlayer.PlayerGui.MissionEndNavigateDialog.TextFrame.Replay)
+                    if v.Name == "MissionEnd" then
+                        click(game:GetService("Players").LocalPlayer.PlayerGui.HUD.MissionEnd.BG.Actions.Replay)
                     end
                 end
             end
