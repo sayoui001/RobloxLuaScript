@@ -4,7 +4,7 @@ until game:IsLoaded()
 wait(3)
 if game.PlaceId == 4996049426 or game.PlaceId == 7785334488 then
 
-    local gs = game:GetService("ReplicatedStorage").Remotes.Input
+    local gs = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Input")
     local UserInputService = game:GetService("UserInputService")
     local RunService = game:GetService("RunService")
 
@@ -101,15 +101,16 @@ if game.PlaceId == 4996049426 or game.PlaceId == 7785334488 then
 
     function AutoJoin()
         spawn(function()
-            local start = {
-            [1] = "InfiniteMode1Start"
-            }
-
             local inf = {
                 [1] = "InfiniteMode1InfLevel",
                 [2] = "-1.7",
                 [3] = false
+            }    
+            
+            local start = {
+                [1] = "InfiniteMode1Start"
             }
+                
             while _G.AutoStarPass == true do
                 if game.PlaceId == 4996049426 then
                     game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.CFrame = game:GetService("Workspace").Queue.Infinite.InfiniteMode1.CFrame 
