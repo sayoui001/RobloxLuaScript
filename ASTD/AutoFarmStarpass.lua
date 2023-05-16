@@ -133,7 +133,7 @@ if game.PlaceId == 4996049426 or game.PlaceId == 7785334488 then
         spawn(function()
             while _G.AutoStarPass == true do
                 wait(5)
-                if game:GetService("Workspace").TowerHP.HP < 0 then
+                if game:GetService("Workspace").TowerHP.HP.Value < 0 then
                     local url = _G.WebhookUrl
                     local scripttime = game.Workspace.DistributedGameTime
                     local seconds = scripttime
