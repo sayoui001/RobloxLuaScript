@@ -28,8 +28,6 @@ if game.PlaceId == 4996049426 or game.PlaceId == 7785334488 then
     end 
 ]]
 
-game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Input"):FireServer(unpack(args))
-
     function PlaceUnit()
         spawn(function()
             local EX = {
