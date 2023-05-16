@@ -111,6 +111,8 @@ if game.PlaceId == 4996049426 or game.PlaceId == 7785334488 then
                     game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.CFrame = game:GetService("Workspace").Queue.Infinite.InfiniteMode.CFrame 
                 end
                 if game.PlaceId == 7785334488 then
+                    game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.CFrame = workspace.Queue["Lobby World 2"].Infinite.Props["Corp SpaceShip"].Door["Door Base"].CFrame
+                        wait(3)    
                     game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.CFrame = game:GetService("Workspace").Queue.Joinables.InfiniteMode.CFrame
                 end
                 wait(1)
