@@ -8,26 +8,6 @@ if game.PlaceId == 4996049426 or game.PlaceId == 7785334488 then
     local UserInputService = game:GetService("UserInputService")
     local RunService = game:GetService("RunService")
 
---[[     function EvoEXP()
-        spawn(function()
-            local EXP4 = { [1] = "UpgradeUnit", [2] = "EXP III", [3] = 2 }
-            local EXP3 = { [1] = "UpgradeUnit", [2] = "EXP II", [3] = 2 }
-            local EXP2 = { [1] = "UpgradeUnit", [2] = "EXP I", [3] = 2 }
-            while _G.AutoEvo == true do
-                gs:FireServer(unpack(EXP4))
-                wait(0.25)
-                gs:FireServer(unpack(EXP3))
-                wait(0.25)
-                gs:FireServer(unpack(EXP4))
-                wait(0.25)
-                gs:FireServer(unpack(EXP2))
-                wait(0.25)
-                if not _G.AutoEvo then break end
-            end
-        end)
-    end 
-]]
-
     function PlaceUnit()
         spawn(function()
             local EX = {
@@ -128,10 +108,10 @@ if game.PlaceId == 4996049426 or game.PlaceId == 7785334488 then
             }
             while _G.AutoStarPass == true do
                 if game.PlaceId == 4996049426 then
-                    game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.CFrame = game:GetService("Workspace").Queue.Infinite.InfiniteMode1.CFrame 
+                    game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.CFrame = game:GetService("Workspace").Queue.Infinite.InfiniteMode.CFrame 
                 end
                 if game.PlaceId == 7785334488 then
-                    game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.CFrame = game:GetService("Workspace").Queue.Joinables.InfiniteMode1.CFrame
+                    game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.CFrame = game:GetService("Workspace").Queue.Joinables.InfiniteMode.CFrame
                 end
                 wait(1)
                 gs:FireServer(unpack(inf))
