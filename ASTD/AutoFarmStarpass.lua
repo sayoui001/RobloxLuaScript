@@ -132,7 +132,7 @@ if game.PlaceId == 4996049426 or game.PlaceId == 7785334488 then
                 if game.PlaceId == 7785334488 then
                     game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.CFrame = game:GetService("Workspace").Queue["Lobby World 2"].Infinite.Props["Corp SpaceShip"].Door["Door Base"].CFrame
                     wait(5)    
-                    game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.CFrame = game:GetService("Workspace").Queue.Joinables.InfiniteMode1.CFrame
+                    game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.CFrame = game:GetService("Workspace").Queue.Joinables.InfiniteMode.CFrame
                     wait(1)
                     gs:FireServer(unpack(inf))
                     wait(1)
