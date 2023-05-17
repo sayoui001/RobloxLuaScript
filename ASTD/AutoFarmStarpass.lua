@@ -32,15 +32,17 @@ if game.PlaceId == 4996049426 or game.PlaceId == 7785334488 then
             while _G.AutoStarPass == true do
                 RunService:Set3dRenderingEnabled(false)
                 gs:FireServer(unpack(EX))
-                wait(1)
+                wait(2)
                 if game:GetService("Players").LocalPlayer.PlayerGui.HUD.FastForward.TextLabel.Text == ("1X") then
                     gs:FireServer(unpack(FW))
+                    wait(2)
                 elseif game:GetService("Players").LocalPlayer.PlayerGui.HUD.FastForward.TextLabel.Text == ("2X") and _G.AutoX3 == true then
                     gs:FireServer(unpack(FW))
+                    wait(2)
                 end
-                wait(1)
+                wait(2)
                 gs:FireServer(unpack(pGenos))
-                wait(1)
+                wait(2)
                 i = i + 1 
                 if i > 9 then break end
             end
@@ -131,7 +133,7 @@ if game.PlaceId == 4996049426 or game.PlaceId == 7785334488 then
                 end
                 if game.PlaceId == 7785334488 then
                     game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.CFrame = game:GetService("Workspace").Queue["Lobby World 2"].Infinite.Props["Corp SpaceShip"].Door["Door Base"].CFrame
-                    wait(5)    
+                    wait(7)    
                     game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.CFrame = game:GetService("Workspace").Queue.Joinables.InfiniteMode.CFrame
                     wait(1)
                     gs:FireServer(unpack(inf))
