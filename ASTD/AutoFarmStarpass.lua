@@ -124,24 +124,18 @@ if game.PlaceId == 4996049426 or game.PlaceId == 7785334488 then
             while _G.AutoStarPass == true do
                 if game.PlaceId == 4996049426 then
                     game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.CFrame = game:GetService("Workspace").Queue.Infinite.InfiniteMode1.CFrame 
+                    wait(1)
+                    gs:FireServer(unpack(inf1))
+                    wait(1)
+                    gs:FireServer(unpack(start1))
                 end
                 if game.PlaceId == 7785334488 then
                     game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.CFrame = game:GetService("Workspace").Queue["Lobby World 2"].Infinite.Props["Corp SpaceShip"].Door["Door Base"].CFrame
                     wait(5)    
                     game:GetService("Players").LocalPlayer.Character.HumanoidRootPart.CFrame = game:GetService("Workspace").Queue.Joinables.InfiniteMode1.CFrame
-                end
-                wait(1)
-                if game.PlaceId == 4996049426 then
-                    gs:FireServer(unpack(inf1))
-                end
-                if game.PlaceId == 7785334488 then
+                    wait(1)
                     gs:FireServer(unpack(inf))
-                end
-                wait(1)
-                if game.PlaceId == 4996049426 then
-                    gs:FireServer(unpack(start1))
-                end
-                if game.PlaceId == 7785334488 then
+                    wait(1)
                     gs:FireServer(unpack(start))
                 end
                 wait(15)
