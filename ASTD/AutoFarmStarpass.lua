@@ -1,7 +1,6 @@
 repeat
     wait()
 until game:IsLoaded()
-wait(3)
 if game.PlaceId == 4996049426 or game.PlaceId == 7785334488 then
 
     local gs = game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("Input")
