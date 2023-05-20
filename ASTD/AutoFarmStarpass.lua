@@ -202,7 +202,7 @@ if game.PlaceId == 4996049426 or game.PlaceId == 7785334488 then
     if _G.AutoStarPass == true then
         for _, v in pairs(game:GetService("Workspace"):GetChildren()) do
             if v.Name == "Queue" then
-                --EvoEXP()
+                wait(5)
                 AutoJoin()
                 break
             end
