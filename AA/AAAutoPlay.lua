@@ -863,7 +863,7 @@ local cfg={
     RequestDelay=0.5,
     MaxUpgradesPerRun=99,
 }
-local app={Config=cfg,LastPlan={},Running=false,Stopped=false,Uncertain=false,Requests=0}
+local app={Config=cfg,LastPlan={},Running=false,Stopped=false,Uncertain=false,Requests=0,Status="Idle",LastUnit="-",LastCost=0,Verified=0}
 env.AAAutoUpgrade=app
 local function log(...) print("[AAAutoUpgrade]",...) end
 local function equippedUuid(slot)
@@ -998,7 +998,10 @@ function app:UpgradeOnce()
             if money-(tonumber(cfg.ReserveMoney) or 0)>=u.Cost then selected=u;break end
         end
     end
-    if not selected then return false,"No affordable, priced, eligible unit" end
+    if not selected then
+        self.Status=#queue==0 and "No eligible units" or "Waiting for money / eligible upgrade"
+        return false,"No affordable, priced, eligible unit"
+    end
     local unit=selected.Unit
     local stats=unit:FindFirstChild("_stats")
     local owner=getStat(stats,"player")
@@ -1010,6 +1013,9 @@ function app:UpgradeOnce()
         return false,"Per-run upgrade limit reached"
     end
     self.Requests+=1
+    self.LastUnit=unit.Name
+    self.LastCost=selected.Cost
+    self.Status="Upgrading "..unit.Name.." | Slot "..selected.Slot.." | Level "..oldLevel.." -> "..(oldLevel+1).." | Cost "..tostring(selected.Cost)
     log("UPGRADE REQUEST",unit.Name,"slot",selected.Slot,"old level",oldLevel,"expected cost",selected.Cost)
     -- Source references pass the placed Model itself, not its inventory UUID.
     local ok,reply=pcall(function() return remote:InvokeServer(unit) end)
@@ -1018,6 +1024,8 @@ function app:UpgradeOnce()
     repeat
         local observed=tonumber(getStat(stats,"upgrade"))
         if observed and observed>oldLevel then
+            self.Verified+=1
+            self.Status="Verified "..unit.Name.." | Level "..oldLevel.." -> "..observed
             log("UPGRADE VERIFIED",unit.Name,oldLevel,"->",observed)
             return true,"Verified"
         end
@@ -1025,13 +1033,15 @@ function app:UpgradeOnce()
         task.wait(0.1)
     until os.clock()>=deadline
     self.Uncertain=true
+    self.Status="Paused: upgrade result not confirmed for "..unit.Name
     self:Stop()
     warn("[AAAutoUpgrade] UPGRADE UNCERTAIN; stopped to prevent duplicates",unit.Name,oldLevel,"reply",tostring(reply))
     return false,"Upgrade not confirmed; stopped"
 end
 function app:Start()
     if self.Running then return end
-    self.Running=true;self.Stopped=false;self.Uncertain=false;self.Requests=0
+    self.Running=true;self.Stopped=false;self.Uncertain=false;self.Requests=0;self.Verified=0
+    self.Status=cfg.Mode=="LIVE" and "Starting Auto Upgrade" or "Previewing upgrades"
     local live=cfg.Mode=="LIVE"
     log("Scheduler started",live and "LIVE" or "PREVIEW")
     task.spawn(function()
@@ -1039,6 +1049,7 @@ function app:Start()
             if live then
                 local ok,reason=self:UpgradeOnce()
                 if not ok and reason~="No affordable, priced, eligible unit" then
+                    self.Status="Paused: "..tostring(reason)
                     log("Scheduler pause",reason)
                     self:Stop()
                     break
@@ -1051,7 +1062,7 @@ function app:Start()
         self.Running=false
     end)
 end
-function app:Stop() self.Stopped=true;self.Running=false;log("Stopped") end
+function app:Stop() self.Stopped=true;self.Running=false;if not self.Uncertain and not tostring(self.Status):find("Paused:",1,true) then self.Status="Stopped" end;log("Stopped") end
 function app:Destroy() self:Stop() end
 log("U2 loaded: PREVIEW default; set Config.Mode='LIVE' to allow verified upgrades")
 
@@ -1115,6 +1126,19 @@ local function buildWindUI()
     local dashboard=window:Tab({Title="Dashboard",Icon="layout-dashboard"})
     dashboard:Paragraph({Title="Sequential / LIVE",Desc="Place all units first, then begin Auto Upgrade."})
     app.StatusParagraph=dashboard:Paragraph({Title="Auto Play Status",Desc=app.CurrentStatus or "Idle - ready to start"})
+    app.UpgradeParagraph=dashboard:Paragraph({Title="Auto Upgrade",Desc="Idle | Sequential mode"})
+    task.spawn(function()
+        local last=""
+        while app.WindUIWindow==window and env.AAAutoPlace==app do
+            local upgrade=upgradeApp()
+            local details=upgrade and (tostring(upgrade.Status or "Idle").." | Verified "..tostring(upgrade.Verified or 0).." | Requests "..tostring(upgrade.Requests or 0).."/"..tostring(upgrade.Config.MaxUpgradesPerRun)) or "Unavailable"
+            if details~=last then
+                last=details
+                pcall(function() app.UpgradeParagraph:SetDesc(details) end)
+            end
+            task.wait(0.5)
+        end
+    end)
     dashboard:Button({Title="START AUTO PLAY",Icon="play",Callback=startAutoPlay})
     dashboard:Button({Title="STOP ALL",Icon="square",Callback=stopAutoPlay})
     local previewToggle
