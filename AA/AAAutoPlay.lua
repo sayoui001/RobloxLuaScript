@@ -1,5 +1,6 @@
 -- AA AutoPlace Phase 1 | single-file, slots 1-6, bounded real placement
 -- Default PREVIEW: only LIVE mode sends spawn_unit requests.
+local SCRIPT_VERSION="1.1.0-test.1"
 repeat task.wait() until game:IsLoaded()
 local Players=game:GetService("Players")
 local RS=game:GetService("ReplicatedStorage")
@@ -102,6 +103,8 @@ end
 cfg.Mode=override.Mode=="PREVIEW" and "PREVIEW" or "LIVE"
 local app={Running=false,Cancelled=false,Config=cfg,LastResult=nil,Placed={},Connections={},PreviewFolder=nil}
 env.AAAutoPlace=app
+app.Version=SCRIPT_VERSION
+print("[AAAutoPlay] VERSION",SCRIPT_VERSION)
 local function log(...) print("[AAAutoPlace]",...) end
 function app:SaveSettings()
     if type(writefile)~="function" then
@@ -1143,7 +1146,7 @@ end
 local function buildWindUI()
     local WindUI=loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/download/1.6.66/main.lua"))()
     local window=WindUI:CreateWindow({
-        Title="AA Auto Play",Icon="gamepad-2",Folder="AAAutoPlay",
+        Title="AA Auto Play v"..SCRIPT_VERSION,Icon="gamepad-2",Folder="AAAutoPlay",
         Size=UDim2.fromOffset(585,470),Theme="Dark",
         HideSearchBar=true,Resizable=true,ToggleKey=Enum.KeyCode.RightShift,
         OpenButton={Title="Open AA Auto Play",Enabled=true,Draggable=true,OnlyMobile=false,Scale=0.65},
@@ -1228,7 +1231,7 @@ local function buildWindUI()
 end
 local uiOk,uiErr=pcall(buildWindUI)
 if not uiOk then warn("[AAAutoPlay] WindUI failed:",uiErr) end
-log("Auto Play loaded; mode",cfg.Mode,"slots",table.concat(cfg.Slots,","))
+log("Auto Play loaded; version",SCRIPT_VERSION,"mode",cfg.Mode,"slots",table.concat(cfg.Slots,","))
 if override.AutoStart==true and cfg.Mode=="LIVE" then
     task.defer(function()
         while not app.Cancelled do
