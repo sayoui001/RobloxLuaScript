@@ -982,7 +982,23 @@ local function upgradeRemote()
     return remote and remote:IsA("RemoteFunction") and remote or nil
 end
 function app:UpgradeOnce()
-    if self.Uncertain then return false,"Previous request uncertain; reload or investigate" end
+    if self.Uncertain then
+        local pending=self.PendingUpgrade
+        if pending then
+            local stats=pending.Unit and pending.Unit:FindFirstChild("_stats")
+            local observed=stats and tonumber(getStat(stats,"upgrade"))
+            if observed and observed>pending.Level then
+                self.Uncertain=false;self.PendingUpgrade=nil;self.Verified+=1
+                self.Status="Late verified "..pending.Unit.Name.." | Level "..pending.Level.." -> "..observed
+                return true,"Late verified"
+            end
+            if os.clock()-pending.Since<12 then
+                self.Status="Rechecking upgrade result ("..math.floor(os.clock()-pending.Since).."/12s)"
+                return false,"Rechecking pending upgrade"
+            end
+        end
+        self.Uncertain=false;self.PendingUpgrade=nil
+    end
     if cfg.Mode~="LIVE" then return false,"Mode is PREVIEW; no request sent" end
     local remote=upgradeRemote()
     if not remote then return false,"upgrade_unit_ingame missing" end
@@ -1010,7 +1026,8 @@ function app:UpgradeOnce()
         return false,"Unit ownership or level changed"
     end
     if self.Requests>=math.max(1,tonumber(cfg.MaxUpgradesPerRun) or 30) then
-        return false,"Per-run upgrade limit reached"
+        self.Status="Upgrade request batch reached; continuing"
+        self.Requests=0
     end
     self.Requests+=1
     self.LastUnit=unit.Name
@@ -1033,14 +1050,14 @@ function app:UpgradeOnce()
         task.wait(0.1)
     until os.clock()>=deadline
     self.Uncertain=true
-    self.Status="Paused: upgrade result not confirmed for "..unit.Name
-    self:Stop()
-    warn("[AAAutoUpgrade] UPGRADE UNCERTAIN; stopped to prevent duplicates",unit.Name,oldLevel,"reply",tostring(reply))
-    return false,"Upgrade not confirmed; stopped"
+    self.PendingUpgrade={Unit=unit,Level=oldLevel,Since=os.clock()}
+    self.Status="Waiting to recheck upgrade result: "..unit.Name
+    warn("[AAAutoUpgrade] UPGRADE NOT CONFIRMED; recheck before any retry",unit.Name,oldLevel,"reply",tostring(reply))
+    return false,"Rechecking pending upgrade"
 end
 function app:Start()
     if self.Running then return end
-    self.Running=true;self.Stopped=false;self.Uncertain=false;self.Requests=0;self.Verified=0
+    self.Running=true;self.Stopped=false;self.Uncertain=false;self.PendingUpgrade=nil;self.Requests=0;self.Verified=0
     self.Status=cfg.Mode=="LIVE" and "Starting Auto Upgrade" or "Previewing upgrades"
     local live=cfg.Mode=="LIVE"
     log("Scheduler started",live and "LIVE" or "PREVIEW")
@@ -1048,11 +1065,9 @@ function app:Start()
         while self.Running and not self.Stopped do
             if live then
                 local ok,reason=self:UpgradeOnce()
-                if not ok and reason~="No affordable, priced, eligible unit" then
-                    self.Status="Paused: "..tostring(reason)
-                    log("Scheduler pause",reason)
-                    self:Stop()
-                    break
+                if not ok and reason~="No affordable, priced, eligible unit" and reason~="Rechecking pending upgrade" then
+                    self.Status="Waiting / retrying: "..tostring(reason)
+                    log("Scheduler retry",reason)
                 end
             else
                 self:Preview()
@@ -1087,27 +1102,38 @@ if upgradeApp() then
     uc.AllowLowerPriorityWhenUnaffordable=savedUpgrade and savedUpgrade.AllowLowerPriorityWhenUnaffordable or false
 end
 local autoPlayRunning=false
+local autoPlayCancelled=false
 local function startAutoPlay()
     if autoPlayRunning or app.Running then return end
     autoPlayRunning=true
+    autoPlayCancelled=false
     task.spawn(function()
         local upgrade=upgradeApp()
         if upgrade then upgrade:Stop() end
-        local ok,err=xpcall(function() app:Run() end,debug.traceback)
-        if not ok then app.Running=false;warn("[AAAutoPlay] Placement failed:",err) end
-        local result=app.LastResult
-        if ok and result and result.completed and cfg.Mode=="LIVE" and not app.Cancelled
-            and upgrade and upgrade.Config.Enabled then
-            upgrade.Config.Mode="LIVE"
-            log("SEQUENTIAL: placement targets met; starting upgrade")
-            upgrade:Start()
-        else
-            log("SEQUENTIAL: upgrade not started; placement incomplete, stopped, or PREVIEW")
+        while not autoPlayCancelled do
+            local ok,err=xpcall(function() app:Run() end,debug.traceback)
+            if not ok then app.Running=false;warn("[AAAutoPlay] Placement error; retrying:",err) end
+            if autoPlayCancelled or app.Cancelled then break end
+            local result=app.LastResult
+            if ok and result and result.completed then
+                if cfg.Mode=="LIVE" and upgrade and upgrade.Config.Enabled then
+                    upgrade.Config.Mode="LIVE"
+                    log("SEQUENTIAL: placement targets met; starting upgrade")
+                    upgrade:Start()
+                end
+                break
+            end
+            statusText("Placement incomplete / map not ready - retrying in 5s (Stop to cancel)")
+            for _=1,50 do
+                if autoPlayCancelled then break end
+                task.wait(0.1)
+            end
         end
         autoPlayRunning=false
     end)
 end
 local function stopAutoPlay()
+    autoPlayCancelled=true
     app:Stop()
     local upgrade=upgradeApp()
     if upgrade then upgrade:Stop() end
@@ -1205,7 +1231,7 @@ if not uiOk then warn("[AAAutoPlay] WindUI failed:",uiErr) end
 log("Auto Play loaded; mode",cfg.Mode,"slots",table.concat(cfg.Slots,","))
 if override.AutoStart==true and cfg.Mode=="LIVE" then
     task.defer(function()
-        for attempt=1,30 do
+        while not app.Cancelled do
             if app.Cancelled then return end
             local map=WS:FindFirstChild("_MAP_CONFIG")
             local bases=WS:FindFirstChild("_BASES")
