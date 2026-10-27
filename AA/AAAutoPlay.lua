@@ -393,6 +393,40 @@ local function pathMidpoint(percentOverride)
         end
     end
     if #nodes<2 then return nil,"not enough numbered road parts (including nested)" end
+    -- Maps may name every direct road node "10". Treat these as an unnumbered path,
+    -- otherwise the duplicate-index permutation guard rejects more than 6 nodes.
+    if #nodes>6 then
+        local sameIndex=true
+        for i=2,#nodes do
+            if nodes[i].Index~=nodes[1].Index then sameIndex=false;break end
+        end
+        if sameIndex then
+            local bases=WS:FindFirstChild("_BASES")
+            local pve=bases and bases:FindFirstChild("pve")
+            local lanes=pve and pve:FindFirstChild("LANES")
+            local lane=lanes and (lanes:FindFirstChild("1") or lanes:GetChildren()[1])
+            local spawn=lane and lane:FindFirstChild("spawn")
+            if not spawn or not spawn:IsA("BasePart") then
+                return nil,"duplicate-index road but Lane 1 spawn missing"
+            end
+            local remaining=table.clone(nodes)
+            local orderedNodes={}
+            local previous=spawn.Position
+            while #remaining>0 do
+                local bestIndex,bestDistance=1,math.huge
+                for i,node in ipairs(remaining) do
+                    local distance=(node.Position-previous).Magnitude
+                    if distance<bestDistance then bestIndex,bestDistance=i,distance end
+                end
+                local node=table.remove(remaining,bestIndex)
+                node.Index=#orderedNodes+1
+                table.insert(orderedNodes,node)
+                previous=node.Position
+            end
+            nodes=orderedNodes
+            log("ROAD REPEATED INDEX FALLBACK","nodes",#nodes,"ordered from Lane 1 spawn")
+        end
+    end
     -- Some AA maps reuse waypoint numbers (e.g. 4, 12, 14) for intermediate turns.
     -- Keep every waypoint and choose the shortest local traversal for equal indices.
     table.sort(nodes,function(a,b)
