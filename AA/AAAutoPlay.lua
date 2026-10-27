@@ -546,7 +546,7 @@ local function unitPlacementCandidates(kind,existing,required,mainCenter,offsets
     elseif kind=="Farm" then
         local base=math.clamp(tonumber(cfg.PathPercent) or 50,0,100)
         -- Distribute around the configured path position, never outside +/- 10%.
-        local percents={base,base-10,base+10}
+        local percents={base-10,base+10}
         for _,offset in ipairs(offsetsList) do
             for _,p in ipairs(percents) do
                 local percent=math.clamp(p,0,100)
@@ -652,7 +652,7 @@ function app:ShowTypePreview()
                 for i=0,count-1 do table.insert(percents,i*10) end
             else
                 local base=math.clamp(tonumber(cfg.PathPercent) or 50,0,100)
-                percents={base-10,base,base+10}
+                percents={base-10,base+10}
             end
             for _,p in ipairs(percents) do
                 local percent=math.clamp(p,0,100)
