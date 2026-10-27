@@ -628,6 +628,7 @@ function app:Destroy()
     for _,conn in ipairs(self.Connections) do conn:Disconnect() end
     if self.Gui then self.Gui:Destroy() end
     if self.RayfieldWindow then pcall(function() self.RayfieldWindow:Unload() end) end
+    if self.WindUIWindow then pcall(function() self.WindUIWindow:Destroy() end) end
 end
 function app:Run()
     if self.Running then return end
@@ -1020,203 +1021,78 @@ local function stopAutoPlay()
 end
 
 -- Native compact UI: independent from remote UI libraries.
-local function buildAutoPlayUI()
-    local gui=Instance.new("ScreenGui")
-    gui.Name="AAAutoPlayUI"
-    gui.ResetOnSpawn=false
-    gui.Parent=player:WaitForChild("PlayerGui")
-    app.Gui=gui
-    local bg=Instance.new("Frame")
-    bg.Name="Window"
-    bg.Size=UDim2.fromOffset(440,430)
-    bg.Position=UDim2.new(0,28,0.5,-215)
-    bg.BackgroundColor3=Color3.fromRGB(23,28,39)
-    bg.BorderSizePixel=0
-    bg.Parent=gui
-    Instance.new("UICorner",bg).CornerRadius=UDim.new(0,12)
-    local function label(parent,value,y,h,size)
-        local t=Instance.new("TextLabel")
-        t.BackgroundTransparency=1
-        t.TextColor3=Color3.fromRGB(225,235,245)
-        t.TextXAlignment=Enum.TextXAlignment.Left
-        t.Font=Enum.Font.Gotham
-        t.TextSize=size or 14
-        t.Text=value
-        t.Position=UDim2.fromOffset(14,y)
-        t.Size=UDim2.new(1,-28,0,h or 26)
-        t.Parent=parent
-        return t
-    end
-    local function button(parent,text,x,y,w,h,fn)
-        local t=Instance.new("TextButton")
-        t.BackgroundColor3=Color3.fromRGB(48,64,88)
-        t.TextColor3=Color3.fromRGB(255,255,255)
-        t.TextSize=13
-        t.Font=Enum.Font.GothamMedium
-        t.Text=text
-        t.Position=UDim2.fromOffset(x,y)
-        t.Size=UDim2.fromOffset(w,h or 33)
-        t.Parent=parent
-        Instance.new("UICorner",t).CornerRadius=UDim.new(0,6)
-        table.insert(app.Connections,t.MouseButton1Click:Connect(fn))
-        return t
-    end
-    local function input(parent,title,value,x,y,w,onCommit)
-        local box=Instance.new("TextBox")
-        box.BackgroundColor3=Color3.fromRGB(34,43,60)
-        box.TextColor3=Color3.new(1,1,1)
-        box.Font=Enum.Font.Gotham
-        box.TextSize=14
-        box.PlaceholderText=title
-        box.Text=tostring(value)
-        box.ClearTextOnFocus=false
-        box.Position=UDim2.fromOffset(x,y)
-        box.Size=UDim2.fromOffset(w,34)
-        box.Parent=parent
-        Instance.new("UICorner",box).CornerRadius=UDim.new(0,6)
-        table.insert(app.Connections,box.FocusLost:Connect(function()
-            local number=tonumber(box.Text)
-            if number then onCommit(number) end
-        end))
-        return box
-    end
-    label(bg,"AA AUTO PLAY",10,30,19)
-    local status=label(bg,"Idle | Sequential | LIVE",42,28,12)
-    app.StatusLabel=status
-    local currentTab="Dashboard"
+local function buildWindUI()
+    local WindUI=loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/download/1.6.66/main.lua"))()
+    local window=WindUI:CreateWindow({
+        Title="AA Auto Play",Icon="gamepad-2",Folder="AAAutoPlay",
+        Size=UDim2.fromOffset(585,470),Theme="Dark",
+        HideSearchBar=true,Resizable=true,ToggleKey=Enum.KeyCode.RightShift,
+    })
+    app.WindUIWindow=window
+    local dashboard=window:Tab({Title="Dashboard",Icon="layout-dashboard"})
+    dashboard:Paragraph({Title="Sequential / LIVE",Desc="Place all units first, then begin Auto Upgrade."})
+    dashboard:Button({Title="START AUTO PLAY",Icon="play",Callback=startAutoPlay})
+    dashboard:Button({Title="STOP ALL",Icon="square",Callback=stopAutoPlay})
+    local previewToggle
+    previewToggle=dashboard:Toggle({Title="Show Placement Preview",Value=cfg.ShowPreview,Callback=function(v)app:SetPreview(v)end})
+    dashboard:Button({Title="Refresh Preview",Callback=function()app:RefreshPreview()end})
+    dashboard:Button({Title="Preview Upgrade Queue",Callback=function()local u=upgradeApp();if u then u:Preview()end end})
+    local unitTab=window:Tab({Title="Units",Icon="users"})
+    unitTab:Paragraph({Title="Per-slot configuration",Desc="Select a slot from the dropdown below. Changes affect the selected slot only."})
     local selected=1
-    local pages={}
-    local tabButtons={}
-    local tabNames={"Dashboard","Units","Placement","Settings"}
-    for i,name in ipairs(tabNames) do
-        tabButtons[i]=button(bg,name,12+(i-1)*105,78,99,32,function()
-            currentTab=name
-            for n,p in pairs(pages) do p.Visible=(n==name) end
-            for j,b in ipairs(tabButtons) do b.BackgroundColor3=Color3.fromRGB(j==i and 48 or 37,j==i and 116 or 48,j==i and 156 or 68) end
-        end)
+    local changing=false
+    local typeControl,countControl,priorityControl,enabledControl,targetControl
+    local function syncControls()
+        changing=true
+        local upgrade=upgradeApp()
+        typeControl:Select(cfg.UnitTypes[selected] or "Damage")
+        countControl:Set(cfg.Slots[selected] or 0)
+        priorityControl:Set(cfg.UnitPriority[selected] or selected)
+        enabledControl:Set(upgrade and upgrade.Config.Slots[selected]==true or false)
+        targetControl:Set(upgrade and upgrade.Config.TargetLevel[selected] or -1)
+        changing=false
     end
-    local function page(name)
-        local p=Instance.new("Frame")
-        p.Name=name
-        p.BackgroundTransparency=1
-        p.Position=UDim2.fromOffset(12,124)
-        p.Size=UDim2.new(1,-24,1,-136)
-        p.Visible=name=="Dashboard"
-        p.Parent=bg
-        pages[name]=p
-        return p
-    end
-    local dash=page("Dashboard")
-    local overview=label(dash,"Sequential: Place all requested units, then Upgrade",4,36,13)
-    overview.TextWrapped=true
-    button(dash,"START LIVE",4,52,193,38,startAutoPlay)
-    button(dash,"STOP ALL",210,52,194,38,stopAutoPlay)
-    local progress=label(dash,"Placement: idle | Upgrade: idle",102,62,13)
-    progress.TextWrapped=true
-    button(dash,"PREVIEW PATH",4,174,193,34,function()app:SetPreview(true);app:RefreshPreview()end)
-    button(dash,"UPGRADE QUEUE",210,174,194,34,function()local u=upgradeApp();if u then u:Preview() end end)
-    local units=page("Units")
-    local slotBtns={}
-    local slotLabel=label(units,"Slot 1",43,24,16)
-    for i=1,6 do
-        local number=i
-        slotBtns[i]=button(units,tostring(i),4+(i-1)*67,0,62,34,function()
-            selected=number
-            units:SetAttribute("SelectedSlot",number)
-        end)
-    end
-    local typeBtn,enabledBtn
-    local countInput,priorityInput,targetInput
-    typeBtn=button(units,"Type: Damage",4,77,193,34,function()
-        local kinds={"Damage","Buff","Slow","Farm"}
-        local current=table.find(kinds,cfg.UnitTypes[selected]) or 1
-        cfg.UnitTypes[selected]=kinds[current%#kinds+1]
-        units:SetAttribute("SelectedSlot",selected)
-    end)
-    enabledBtn=button(units,"Upgrade: ON",210,77,194,34,function()
-        local u=upgradeApp()
-        if u then u.Config.Slots[selected]=not u.Config.Slots[selected] end
-        units:SetAttribute("SelectedSlot",selected)
-    end)
-    label(units,"Count",120,25,12)
-    label(units,"Priority (1 first)",169,24,12)
-    label(units,"Upgrade target (-1 = MAX)",218,25,12)
-    countInput=input(units,"Count",0,258,117,146,function(v)cfg.Slots[selected]=math.clamp(math.floor(v),0,10)end)
-    priorityInput=input(units,"Priority",1,258,165,146,function(v)
-        cfg.UnitPriority[selected]=math.clamp(math.floor(v),1,6)
-        local u=upgradeApp();if u then u.Config.Priority[selected]=cfg.UnitPriority[selected] end
-    end)
-    targetInput=input(units,"Target",-1,258,214,146,function(v)
-        local u=upgradeApp();if u then u.Config.TargetLevel[selected]=math.clamp(math.floor(v),-1,20) end
-    end)
-    local function refreshSlot()
-        local u=upgradeApp()
-        slotLabel.Text="Slot "..selected.."   |   "..tostring(cfg.UnitTypes[selected])
-        typeBtn.Text="Type: "..tostring(cfg.UnitTypes[selected])
-        enabledBtn.Text="Upgrade: "..((u and u.Config.Slots[selected]) and "ON" or "OFF")
-        countInput.Text=tostring(cfg.Slots[selected] or 0)
-        priorityInput.Text=tostring(cfg.UnitPriority[selected] or selected)
-        targetInput.Text=tostring(u and u.Config.TargetLevel[selected] or -1)
-        for i,b in ipairs(slotBtns) do b.BackgroundColor3=i==selected and Color3.fromRGB(48,116,156) or Color3.fromRGB(48,64,88) end
-    end
-    table.insert(app.Connections,units:GetAttributeChangedSignal("SelectedSlot"):Connect(refreshSlot))
-    refreshSlot()
-    local placement=page("Placement")
-    label(placement,"Global placement settings",0,29,16)
-    label(placement,"Main path %",40,25,13)
-    input(placement,"Path %",cfg.PathPercent,252,37,152,function(v)cfg.PathPercent=math.clamp(v,0,100)end)
-    label(placement,"Radius (studs)",86,25,13)
-    input(placement,"Radius",cfg.Radius,252,83,152,function(v)cfg.Radius=math.clamp(v,1,45)end)
-    label(placement,"Grid step",133,25,13)
-    input(placement,"Grid",cfg.GridStep,252,130,152,function(v)cfg.GridStep=math.clamp(v,1,12)end)
-    local show
-    show=button(placement,"Markers: "..(cfg.ShowPreview and "ON" or "OFF"),4,188,193,34,function()
-        app:SetPreview(not cfg.ShowPreview)
-        show.Text="Markers: "..(cfg.ShowPreview and "ON" or "OFF")
-    end)
-    button(placement,"REFRESH PREVIEW",210,188,194,34,function()app:RefreshPreview()end)
-    local settings=page("Settings")
+    unitTab:Dropdown({Title="Select Unit Slot",Values={"Slot 1","Slot 2","Slot 3","Slot 4","Slot 5","Slot 6"},Value="Slot 1",Callback=function(v)
+        local number=tonumber(tostring(v):match("%d+"))
+        if number and number>=1 and number<=6 then selected=number;if typeControl then syncControls()end end
+    end})
+    typeControl=unitTab:Dropdown({Title="Unit Type",Values={"Damage","Buff","Slow","Farm"},Value=cfg.UnitTypes[1] or "Damage",Callback=function(v)
+        if not changing and table.find({"Damage","Buff","Slow","Farm"},v) then cfg.UnitTypes[selected]=v end
+    end})
+    countControl=unitTab:Slider({Title="Placement Count",Step=1,Value={Min=0,Max=10,Default=cfg.Slots[1] or 0},Callback=function(v)
+        if not changing then cfg.Slots[selected]=math.clamp(math.floor(v),0,10)end
+    end})
+    priorityControl=unitTab:Slider({Title="Priority (1 first)",Step=1,Value={Min=1,Max=6,Default=cfg.UnitPriority[1] or 1},Callback=function(v)
+        if not changing then
+            cfg.UnitPriority[selected]=math.clamp(math.floor(v),1,6)
+            local u=upgradeApp();if u then u.Config.Priority[selected]=cfg.UnitPriority[selected]end
+        end
+    end})
     local u=upgradeApp()
-    local enabled
-    enabled=button(settings,"Auto Upgrade: "..((u and u.Config.Enabled) and "ON" or "OFF"),4,12,400,37,function()
-        local a=upgradeApp();if a then a.Config.Enabled=not a.Config.Enabled;enabled.Text="Auto Upgrade: "..(a.Config.Enabled and "ON" or "OFF") end
-    end)
-    label(settings,"Placement -> Upgrade | Upgrade limit: 99",67,36,13)
-    button(settings,"SAVE ALL SETTINGS",4,132,400,38,function()
+    enabledControl=unitTab:Toggle({Title="Upgrade this Slot",Value=u and u.Config.Slots[1]==true or false,Callback=function(v)
+        if not changing then local up=upgradeApp();if up then up.Config.Slots[selected]=v end end
+    end})
+    targetControl=unitTab:Slider({Title="Upgrade Target (-1 = MAX)",Step=1,Value={Min=-1,Max=20,Default=u and u.Config.TargetLevel[1] or -1},Callback=function(v)
+        if not changing then local up=upgradeApp();if up then up.Config.TargetLevel[selected]=math.clamp(math.floor(v),-1,20)end end
+    end})
+    local placement=window:Tab({Title="Placement",Icon="map-pin"})
+    placement:Dropdown({Title="Center Mode",Values={"PATH_MIDPOINT","MOUSE","PLAYER","POSITION"},Value=cfg.CenterMode,Callback=function(v)cfg.CenterMode=v end})
+    placement:Slider({Title="Main Path Position (%)",Step=5,Value={Min=0,Max=100,Default=cfg.PathPercent},Callback=function(v)cfg.PathPercent=v end})
+    placement:Slider({Title="Radius (studs)",Step=1,Value={Min=1,Max=45,Default=cfg.Radius},Callback=function(v)cfg.Radius=v end})
+    placement:Slider({Title="Grid Step",Step=1,Value={Min=1,Max=12,Default=cfg.GridStep},Callback=function(v)cfg.GridStep=v end})
+    placement:Button({Title="Refresh Map Preview",Callback=function()app:RefreshPreview()end})
+    placement:Button({Title="Inspect Road (Console)",Callback=function()app:InspectRoad()end})
+    local settings=window:Tab({Title="Settings",Icon="settings"})
+    settings:Toggle({Title="Enable Auto Upgrade",Value=u and u.Config.Enabled==true or false,Callback=function(v)local up=upgradeApp();if up then up.Config.Enabled=v end end})
+    settings:Paragraph({Title="Settings file",Desc="AAAutoPlaceSettings.json | Reset by deleting file manually. Upgrade limit: 99."})
+    settings:Button({Title="SAVE SETTINGS",Icon="save",Callback=function()
         local ok=app:SaveSettings()
-        status.Text=ok and "Settings saved" or "Save failed - see console"
-    end)
-    label(settings,"Reset: delete AAAutoPlaceSettings.json manually",185,45,12)
-    local dragging=false
-    local dragStart,startPosition
-    table.insert(app.Connections,bg.InputBegan:Connect(function(input)
-        if input.UserInputType==Enum.UserInputType.MouseButton1 and input.Position.Y<bg.AbsolutePosition.Y+38 then
-            dragging=true;dragStart=input.Position;startPosition=bg.Position
-        end
-    end))
-    table.insert(app.Connections,bg.InputEnded:Connect(function(input)
-        if input.UserInputType==Enum.UserInputType.MouseButton1 then dragging=false end
-    end))
-    local UIS=game:GetService("UserInputService")
-    table.insert(app.Connections,UIS.InputChanged:Connect(function(input)
-        if dragging and input.UserInputType==Enum.UserInputType.MouseMovement then
-            local delta=input.Position-dragStart
-            bg.Position=UDim2.new(startPosition.X.Scale,startPosition.X.Offset+delta.X,startPosition.Y.Scale,startPosition.Y.Offset+delta.Y)
-        end
-    end))
-    task.spawn(function()
-        while gui.Parent and app.Gui==gui do
-            local a=upgradeApp()
-            local r=app.LastResult
-            local progressText=r and (tostring(r.placed).." placed / "..tostring(r.attempted).." attempts") or "Placement: idle"
-            progress.Text=progressText.." | Upgrade: "..(a and a.Running and "RUNNING" or "IDLE")
-            task.wait(0.75)
-        end
-    end)
-    log("Compact UI ready; 4 tabs, one-slot editor, shared settings")
+        WindUI:Notify({Title=ok and "Saved" or "Save Failed",Content=ok and "Auto Play settings saved" or "Check console",Duration=3})
+    end})
+    log("WindUI loaded: Dashboard / Units / Placement / Settings")
 end
-local uiOk,uiErr=pcall(buildAutoPlayUI)
-if not uiOk then warn("[AAAutoPlay] UI failed:",uiErr) end
+local uiOk,uiErr=pcall(buildWindUI)
+if not uiOk then warn("[AAAutoPlay] WindUI failed:",uiErr) end
 log("Auto Play loaded; mode",cfg.Mode,"slots",table.concat(cfg.Slots,","))
 if cfg.Mode~="LIVE" and cfg.AutoPreviewOnLoad then
     task.defer(function()
