@@ -1,6 +1,6 @@
 -- AA AutoPlace Phase 1 | single-file, slots 1-6, bounded real placement
 -- Default PREVIEW: only LIVE mode sends spawn_unit requests.
-local SCRIPT_VERSION="1.1.0-test.1"
+local SCRIPT_VERSION="1.1.0-test.2"
 repeat task.wait() until game:IsLoaded()
 local Players=game:GetService("Players")
 local RS=game:GetService("ReplicatedStorage")
@@ -1160,8 +1160,8 @@ local function startAutoPlay()
                 end
                 break
             end
-            statusText("Placement incomplete / map not ready - retrying in 5s (Stop to cancel)")
-            for _=1,50 do
+            statusText("Placement incomplete / map not ready - retrying in 0.5s (Stop to cancel)")
+            for _=1,5 do
                 if autoPlayCancelled then break end
                 task.wait(0.1)
             end
