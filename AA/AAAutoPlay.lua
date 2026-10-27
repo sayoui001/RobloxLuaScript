@@ -315,6 +315,45 @@ local function pathMidpoint(percentOverride)
         return found
     end
     local nodes=collect(road,false)
+    -- Fallback for maps whose road pieces are all named "main" rather than 1,2,3...
+    if #nodes<2 then
+        local parts={}
+        for _,part in ipairs(road:GetChildren()) do
+            if part:IsA("BasePart") and part.Name:lower()=="main" then
+                table.insert(parts,part)
+            end
+        end
+        if #parts>=2 then
+            local bases=WS:FindFirstChild("_BASES")
+            local pve=bases and bases:FindFirstChild("pve")
+            local lanes=pve and pve:FindFirstChild("LANES")
+            local lane=lanes and (lanes:FindFirstChild("1") or lanes:GetChildren()[1])
+            local spawn=lane and lane:FindFirstChild("spawn")
+            if not spawn or not spawn:IsA("BasePart") then
+                return nil,"unnumbered road pieces but enemy spawn unavailable"
+            end
+            local orderedParts={}
+            local remaining=table.clone(parts)
+            local previous=spawn.Position
+            while #remaining>0 do
+                local closest,bestIndex,bestDistance=nil,nil,math.huge
+                for i,part in ipairs(remaining) do
+                    local distance=(part.Position-previous).Magnitude
+                    if distance<bestDistance then
+                        closest,bestIndex,bestDistance=part,i,distance
+                    end
+                end
+                if #orderedParts>0 and bestDistance>60 then
+                    return nil,"unnumbered road has disconnected segments ("..tostring(math.floor(bestDistance)).." studs)"
+                end
+                table.insert(orderedParts,{Index=#orderedParts+1,Position=closest.Position,Path=closest:GetFullName()})
+                previous=closest.Position
+                table.remove(remaining,bestIndex)
+            end
+            nodes=orderedParts
+            log("ROAD UNNUMBERED FALLBACK","pieces",#nodes,"nearest-neighbor from spawn")
+        end
+    end
     if #nodes<2 then
         local groups={}
         for _,child in ipairs(road:GetChildren()) do
