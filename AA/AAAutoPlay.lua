@@ -1094,6 +1094,27 @@ end
 local uiOk,uiErr=pcall(buildWindUI)
 if not uiOk then warn("[AAAutoPlay] WindUI failed:",uiErr) end
 log("Auto Play loaded; mode",cfg.Mode,"slots",table.concat(cfg.Slots,","))
+if override.AutoStart==true and cfg.Mode=="LIVE" then
+    task.defer(function()
+        for attempt=1,30 do
+            if app.Cancelled then return end
+            local map=WS:FindFirstChild("_MAP_CONFIG")
+            local bases=WS:FindFirstChild("_BASES")
+            local units=WS:FindFirstChild("_UNITS")
+            local road=WS:FindFirstChild("_road",true)
+            local endpoints=RS:FindFirstChild("endpoints")
+            local client=endpoints and endpoints:FindFirstChild("client_to_server")
+            local spawn=client and client:FindFirstChild("spawn_unit")
+            if road and bases and units and spawn and spawn:IsA("RemoteFunction") and map then
+                log("Auto Start: map ready; starting Sequential LIVE")
+                startAutoPlay()
+                return
+            end
+            task.wait(1)
+        end
+        warn("[AAAutoPlay] Auto Start skipped: map not ready within readiness checks")
+    end)
+end
 if cfg.Mode~="LIVE" and cfg.AutoPreviewOnLoad then
     task.defer(function()
         local ok,err=xpcall(function() app:Run() end,debug.traceback)
