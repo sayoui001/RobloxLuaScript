@@ -16,13 +16,13 @@ local defaults={
     PathPercent=50, -- 0=start of road, 100=end; defaults to halfway
     Radius=12, GridStep=3, UnitSpacing=3,
     MaxAttemptsPerSlot=40, MaxTotalAttempts=120,
-    VerifyTimeout=2, RetryDelay=0.45, ScanHeight=35,
+    VerifyTimeout=2, LateVerifyTimeout=8, UUIDWaitTimeout=15, RetryDelay=0.45, ScanHeight=35,
     MaxHeightDifference=8, MinNormalY=0.85,
     Slots={0,0,0,0,1,0}, -- target total per slot
     UnitPriority={1,2,3,4,5,6}, -- lower number places first
     UnitTypes={"Damage","Damage","Damage","Damage","Damage","Damage"},
     MaxTotalPlaced=12,
-    CountExistingUnits=true, LateVerifyTimeout=3,
+    CountExistingUnits=true,
     ShowPreview=true, AutoPreviewOnLoad=true, MaxPreviewMarkers=100,
     UILibrary="RayfieldGen2",
     Blacklist={elyssia_jellyfish=true,elyssia_eel=true},
@@ -149,12 +149,36 @@ function app:ClearSavedSettings()
     log("Saved settings cleared; re-execute for defaults")
     return true
 end
-local function statusText(msg) log(msg);if app.StatusLabel and app.StatusLabel.Parent then app.StatusLabel.Text=msg end end
+local function statusText(msg)
+    app.CurrentStatus=tostring(msg)
+    log(msg)
+    if app.StatusLabel and app.StatusLabel.Parent then app.StatusLabel.Text=msg end
+    if app.StatusParagraph then pcall(function() app.StatusParagraph:SetDesc(app.CurrentStatus) end) end
+end
 local function getSlotUuid(n)
     local ui=player:FindFirstChild("PlayerGui")
     local group=ui and ui:FindFirstChild("spawn_units")
     local slot=group and group:FindFirstChild(tostring(n),true)
     return slot and slot:GetAttribute("_equipped_frame_unit_uuid") or nil
+end
+local function waitSlotUuid(n,timeoutSeconds)
+    local started=os.clock()
+    local nextReport=0
+    repeat
+        if app.Cancelled then return nil end
+        local gui=player:FindFirstChild("PlayerGui")
+        local group=gui and gui:FindFirstChild("spawn_units")
+        if gui and not group then group=gui:WaitForChild("spawn_units",0.5) end
+        local slot=group and group:FindFirstChild(tostring(n),true)
+        local uuid=slot and slot:GetAttribute("_equipped_frame_unit_uuid")
+        if type(uuid)=="string" and uuid~="" then return uuid end
+        if os.clock()>=nextReport then
+            statusText("Waiting for UUID: Slot "..n.." ("..math.floor(os.clock()-started).."s) | Stop to cancel")
+            nextReport=os.clock()+3
+        end
+        task.wait(0.2)
+    until app.Cancelled
+    return nil
 end
 local function ownedSnapshot(folder)
     local found={}
@@ -194,7 +218,7 @@ local function matchingNewUnit(folder,before,uuid,position)
                 local ok,pivot=pcall(function() return unit:GetPivot().Position end)
                 if ok then
                     local distance=(pivot-position).Magnitude
-                    if distance<best and distance<=12 then closest,best=unit,distance end
+                    if distance<best and distance<=40 then closest,best=unit,distance end
                 end
             end
         end
@@ -635,7 +659,7 @@ function app:Run()
     self.Running=true
     self.Cancelled=false
     self.Placed={}
-    local result={placed=0,attempted=0,slots={},mode=cfg.Mode,uncertain=false,completed=false}
+    local result={placed=0,attempted=0,slots={},mode=cfg.Mode,completed=false}
     self.LastResult=result
     local center=centerPosition()
     if not center then statusText("No center found for "..tostring(cfg.CenterMode));self.Running=false;return end
@@ -669,13 +693,14 @@ function app:Run()
     end)
     log("Placement order",table.concat(placementOrder,","))
     for _,slotNumber in ipairs(placementOrder) do
-        if self.Cancelled or result.uncertain or result.resourcePause or result.placed>=maxTotal or result.attempted>=maxAttempts then break end
+        if self.Cancelled or result.resourcePause or result.placed>=maxTotal or result.attempted>=maxAttempts then break end
         local want=math.clamp(math.floor(tonumber(cfg.Slots[slotNumber]) or 0),0,10)
         local slotResult={requested=want,placed=0,attempted=0,existing=0}
         result.slots[slotNumber]=slotResult
         if want>0 then
-            local uuid=getSlotUuid(slotNumber)
+            local uuid=waitSlotUuid(slotNumber,cfg.UUIDWaitTimeout)
             if type(uuid)~="string" or uuid=="" then
+                if self.Cancelled then break end
                 warn("[AAAutoPlace] Slot",slotNumber,"has no equipped UUID")
             else
                 slotResult.existing=cfg.CountExistingUnits and countOwnedByUuid(folder,uuid) or 0
@@ -684,13 +709,13 @@ function app:Run()
                 local candidates=unitPlacementCandidates(kind,slotResult.existing,required,center,offsetsList)
                 if not candidates then
                     warn("[AAAutoPlay] No valid path anchors for",kind,"slot",slotNumber)
-                    result.uncertain=true
+                    statusText("Skipping Slot "..slotNumber..": path anchor unavailable")
                     break
                 end
                 log("Slot target",slotNumber,"type",kind,"target",want,"existing",slotResult.existing,"needed",required)
                 for _,candidate in ipairs(candidates) do
-                    if self.Cancelled or slotResult.placed>=required or slotResult.attempted>=perSlot
-                        or result.placed>=maxTotal or result.attempted>=maxAttempts then break end
+                    if self.Cancelled or slotResult.placed>=required
+                        or result.placed>=maxTotal then break end
                     local pos
                     if candidate.Ordinal==0 or candidate.Ordinal==slotResult.placed+1 then
                         pos=findGround(candidate.Center,candidate.Offset)
@@ -698,7 +723,7 @@ function app:Run()
                     if pos and farEnough(pos,self.Placed) then
                         local before=ownedSnapshot(folder)
                         slotResult.attempted+=1;result.attempted+=1
-                        statusText("Slot "..slotNumber.." attempt "..slotResult.attempted)
+                        statusText("Placing Slot "..slotNumber.." ("..kind..") "..slotResult.placed.."/"..required.." | point "..slotResult.attempted.."/"..#candidates)
                         -- RemoteFunction invocation may yield; Stop prevents subsequent attempts.
                         local ok,reply=pcall(function()
                             return remote:InvokeServer(uuid,CFrame.new(pos))
@@ -720,32 +745,33 @@ function app:Run()
                                 task.wait(0.1)
                             until os.clock()>=lateDeadline
                             if not spawned and not self.Cancelled then
-                                result.uncertain=true
-                                warn("[AAAutoPlace] UNCERTAIN: server returned without confirmed spawn; retry suspended for safety",slotNumber)
+                                warn("[AAAutoPlace] Placement not verified; checking next candidate",slotNumber,candidate.Percent,pos)
+                                statusText("Slot "..slotNumber.." not confirmed - trying next point")
                             end
                         end
                         if spawned then
                             slotResult.placed+=1;result.placed+=1
                             table.insert(self.Placed,pos)
+                            statusText("Placed Slot "..slotNumber.." "..slotResult.placed.."/"..required)
                             log("CONFIRMED",slotNumber,spawned.Name,pos)
                         else
                             log("NOT CONFIRMED",slotNumber,pos,"reply",tostring(reply))
                         end
-                        if result.uncertain or self.Cancelled then break end
+                        if self.Cancelled then break end
                         if not self.Cancelled then task.wait(math.max(0.15,cfg.RetryDelay)) end
                     end
                 end
             end
         end
     end
-    result.completed=not self.Cancelled and not result.uncertain
+    result.completed=not self.Cancelled
     for slot=1,6 do
         local target=math.clamp(math.floor(tonumber(cfg.Slots[slot]) or 0),0,10)
         local entry=result.slots[slot]
         if target>0 and (not entry or entry.existing+entry.placed<target) then result.completed=false end
     end
     self.Running=false
-    local outcome = result.uncertain and "PAUSED (uncertain)" or (result.resourcePause and "PAUSED (resource)" or (self.Cancelled and "STOPPED" or "Done"))
+    local outcome = result.resourcePause and "PAUSED (resource)" or (self.Cancelled and "STOPPED" or (result.completed and "PLACEMENT COMPLETE" or "PLACEMENT INCOMPLETE"))
     statusText(outcome.." "..result.placed.." placed / "..result.attempted.." attempts")
 end
 local function startRun()
@@ -1027,10 +1053,12 @@ local function buildWindUI()
         Title="AA Auto Play",Icon="gamepad-2",Folder="AAAutoPlay",
         Size=UDim2.fromOffset(585,470),Theme="Dark",
         HideSearchBar=true,Resizable=true,ToggleKey=Enum.KeyCode.RightShift,
+        OpenButton={Title="Open AA Auto Play",Enabled=true,Draggable=true,OnlyMobile=false,Scale=0.65},
     })
     app.WindUIWindow=window
     local dashboard=window:Tab({Title="Dashboard",Icon="layout-dashboard"})
     dashboard:Paragraph({Title="Sequential / LIVE",Desc="Place all units first, then begin Auto Upgrade."})
+    app.StatusParagraph=dashboard:Paragraph({Title="Auto Play Status",Desc=app.CurrentStatus or "Idle - ready to start"})
     dashboard:Button({Title="START AUTO PLAY",Icon="play",Callback=startAutoPlay})
     dashboard:Button({Title="STOP ALL",Icon="square",Callback=stopAutoPlay})
     local previewToggle
@@ -1089,7 +1117,8 @@ local function buildWindUI()
         local ok=app:SaveSettings()
         WindUI:Notify({Title=ok and "Saved" or "Save Failed",Content=ok and "Auto Play settings saved" or "Check console",Duration=3})
     end})
-    log("WindUI loaded: Dashboard / Units / Placement / Settings")
+    dashboard:Select()
+    log("WindUI loaded: Dashboard selected / Units / Placement / Settings")
 end
 local uiOk,uiErr=pcall(buildWindUI)
 if not uiOk then warn("[AAAutoPlay] WindUI failed:",uiErr) end
