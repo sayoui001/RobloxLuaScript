@@ -327,7 +327,24 @@ local function pathMidpoint(percentOverride)
             nodes=groups[1].Nodes
             log("ROAD GROUP SELECTED",groups[1].Name,"nodes",#nodes)
         elseif #groups>1 then
-            return nil,"multiple nested road groups; inspect before selecting"
+            local bases=WS:FindFirstChild("_BASES")
+            local pve=bases and bases:FindFirstChild("pve")
+            local lanes=pve and pve:FindFirstChild("LANES")
+            local lane=lanes and (lanes:FindFirstChild("1") or lanes:GetChildren()[1])
+            local spawn=lane and lane:FindFirstChild("spawn")
+            if not spawn or not spawn:IsA("BasePart") then
+                return nil,"multiple road groups but Lane 1 spawn unavailable"
+            end
+            local chosen,best=nil,math.huge
+            for _,group in ipairs(groups) do
+                local distance=math.huge
+                for _,node in ipairs(group.Nodes) do
+                    distance=math.min(distance,(node.Position-spawn.Position).Magnitude)
+                end
+                if distance<best then chosen,best=group,distance end
+            end
+            nodes=chosen.Nodes
+            log("ROAD GROUP SELECTED FOR LANE 1",chosen.Name,"nodes",#nodes,"spawn distance",best)
         else
             nodes=collect(road,true)
             if #nodes>=2 then log("ROAD NESTED NODES",#nodes) end
@@ -490,7 +507,7 @@ local function unitPlacementCandidates(kind,existing,required,mainCenter,offsets
     elseif kind=="Farm" then
         local base=math.clamp(tonumber(cfg.PathPercent) or 50,0,100)
         -- Distribute around the configured path position, never outside +/- 10%.
-        local percents={base,base-5,base+5,base-10,base+10}
+        local percents={base,base-10,base+10}
         for _,offset in ipairs(offsetsList) do
             for _,p in ipairs(percents) do
                 local percent=math.clamp(p,0,100)
@@ -596,7 +613,7 @@ function app:ShowTypePreview()
                 for i=0,count-1 do table.insert(percents,i*10) end
             else
                 local base=math.clamp(tonumber(cfg.PathPercent) or 50,0,100)
-                percents={base-10,base-5,base,base+5,base+10}
+                percents={base-10,base,base+10}
             end
             for _,p in ipairs(percents) do
                 local percent=math.clamp(p,0,100)
