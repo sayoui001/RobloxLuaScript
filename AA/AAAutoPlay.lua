@@ -1,6 +1,6 @@
 -- AA AutoPlace Phase 1 | single-file, slots 1-6, bounded real placement
 -- Default PREVIEW: only LIVE mode sends spawn_unit requests.
-local SCRIPT_VERSION="1.1.0-test.2"
+local SCRIPT_VERSION="1.3.0-test.15"
 repeat task.wait() until game:IsLoaded()
 local Players=game:GetService("Players")
 local RS=game:GetService("ReplicatedStorage")
@@ -16,14 +16,16 @@ local defaults={
     CenterPosition=nil,
     PathPercent=50, -- 0=start of road, 100=end; defaults to halfway
     Radius=12, GridStep=3, UnitSpacing=3,
-    MaxAttemptsPerSlot=40, MaxTotalAttempts=120,
-    VerifyTimeout=2, LateVerifyTimeout=8, UUIDWaitTimeout=15, RetryDelay=0.45, ScanHeight=35,
+    UUIDWaitTimeout=15, ScanHeight=35,
     MaxHeightDifference=8, MinNormalY=0.85,
     Slots={0,0,0,0,1,0}, -- target total per slot
-    UnitPriority={1,2,3,4,5,6}, -- lower number places first
+    UnitPriority={1,2,3,4,5,6},
+    StartWave={1,1,1,1,1,1}, -- lower number places first
     UnitTypes={"Damage","Damage","Damage","Damage","Damage","Damage"},
     MaxTotalPlaced=12,
     CountExistingUnits=true,
+    AutoSkillSlots={false,false,false,false,false,false},
+    AutoPlayEnabled=false,
     ShowPreview=true, AutoPreviewOnLoad=true, MaxPreviewMarkers=100,
     UILibrary="RayfieldGen2",
     Blacklist={elyssia_jellyfish=true,elyssia_eel=true},
@@ -31,7 +33,7 @@ local defaults={
 -- Executor-local JSON settings. Never persist LIVE mode or a map-specific Vector3.
 local HttpService=game:GetService("HttpService")
 local settingsPath="AAAutoPlaceSettings.json"
-local persistKeys={"CenterMode","PathPercent","Radius","GridStep","UnitSpacing","ShowPreview","Slots","UnitPriority","UnitTypes","MaxAttemptsPerSlot","MaxTotalAttempts","VerifyTimeout","RetryDelay","CountExistingUnits"}
+local persistKeys={"CenterMode","PathPercent","Radius","GridStep","UnitSpacing","ShowPreview","Slots","UnitPriority","UnitTypes","StartWave","CountExistingUnits","AutoSkillSlots","AutoPlayEnabled"}
 local function readSettings()
     if type(readfile)~="function" then return {} end
     local ok,data=pcall(function() return HttpService:JSONDecode(readfile(settingsPath)) end)
@@ -53,6 +55,16 @@ local function readSettings()
                 for i=1,6 do priorities[i]=math.clamp(math.floor(tonumber(data.UnitPriority[i]) or i),1,6) end
                 safe.UnitPriority=priorities
             end
+        elseif key=="AutoSkillSlots" then
+            if type(data.AutoSkillSlots)=="table" then
+                safe.AutoSkillSlots={}
+                for i=1,6 do safe.AutoSkillSlots[i]=data.AutoSkillSlots[i]==true end
+            end
+        elseif key=="StartWave" then
+            if type(data.StartWave)=="table" then
+                safe.StartWave={}
+                for i=1,6 do safe.StartWave[i]=math.clamp(math.floor(tonumber(data.StartWave[i]) or 1),1,100) end
+            end
         elseif key=="Slots" then
             if type(data.Slots)=="table" then
                 local slots={}
@@ -65,6 +77,14 @@ local function readSettings()
             if type(data[key])=="number" and data[key]==data[key] and math.abs(data[key])<100000 then safe[key]=data[key] end
         elseif type(defaults[key])=="boolean" and type(data[key])=="boolean" then
             safe[key]=data[key]
+        end
+    end
+    if type(data.MapPathPercents)=="table" then
+        safe.MapPathPercents={}
+        for key,value in pairs(data.MapPathPercents) do
+            if type(key)=="string" and #key<=180 and type(value)=="number" and value==value then
+                safe.MapPathPercents[key]=math.clamp(value,0,100)
+            end
         end
     end
     if type(data.Upgrade)=="table" then
@@ -101,6 +121,50 @@ for k,v in pairs(defaults) do
     else cfg[k]=v end
 end
 cfg.Mode=override.Mode=="PREVIEW" and "PREVIEW" or "LIVE"
+local mapPathPercents=saved.MapPathPercents or {}
+local function identifyMap()
+    local mc=WS:FindFirstChild("_MAP_CONFIG")
+    if mc then
+        for _,name in ipairs({"MapId","MapID","MapName","LevelId","LevelID","LevelName","Map","Level"}) do
+            local v=mc:FindFirstChild(name)
+            local raw=(v and v:IsA("ValueBase") and v.Value) or mc:GetAttribute(name)
+            if (type(raw)=="string" and raw~="" and raw~="nil") or (type(raw)=="number" and raw>0) then
+                return "map:"..tostring(game.PlaceId)..":"..name..":"..tostring(raw)
+            end
+        end
+    end
+    local road=WS:FindFirstChild("_road")
+    if not road or not WS:FindFirstChild("_MAP_CONFIG") then return nil end
+    local points={}
+    for _,part in ipairs(road:GetDescendants()) do
+        if part:IsA("BasePart") and (tonumber(part.Name) or part.Name:lower()=="main") then
+            local p=part.Position
+            table.insert(points,string.format("%.0f,%.0f,%.0f",p.X,p.Y,p.Z))
+        end
+    end
+    if #points<2 then return nil end
+    -- Prefer a stable explicit map identifier; geometry hashing is only a fallback.
+    table.sort(points)
+    local hash=2166136261
+    for _,point in ipairs(points) do
+        for i=1,#point do
+            hash=bit32.bxor(hash,string.byte(point,i))
+            hash=(hash*16777619)%4294967296
+        end
+    end
+    return string.format("road:%d:%d:%08x",game.PlaceId,#points,hash)
+end
+local function applyMapPathPercent()
+    local key=identifyMap()
+    if not key then return nil end
+    if cfg.CurrentMapKey~=key then
+        cfg.CurrentMapKey=key
+        cfg.PathPercent=math.clamp(tonumber(mapPathPercents[key]) or 50,0,100)
+        if type(override.PathPercent)=="number" then cfg.PathPercent=math.clamp(override.PathPercent,0,100) end
+    end
+    return key
+end
+applyMapPathPercent()
 local app={Running=false,Cancelled=false,Config=cfg,LastResult=nil,Placed={},Connections={},PreviewFolder=nil}
 env.AAAutoPlace=app
 app.Version=SCRIPT_VERSION
@@ -116,6 +180,12 @@ function app:SaveSettings()
         if key=="UnitTypes" then
             data.UnitTypes={}
             for i=1,6 do data.UnitTypes[i]=cfg.UnitTypes[i] end
+        elseif key=="AutoSkillSlots" then
+            data.AutoSkillSlots={}
+            for i=1,6 do data.AutoSkillSlots[i]=cfg.AutoSkillSlots[i]==true end
+        elseif key=="StartWave" then
+            data.StartWave={}
+            for i=1,6 do data.StartWave[i]=math.clamp(math.floor(tonumber(cfg.StartWave[i]) or 1),1,100) end
         elseif key=="UnitPriority" then
             data.UnitPriority={}
             for i=1,6 do data.UnitPriority[i]=math.clamp(math.floor(tonumber(cfg.UnitPriority[i]) or i),1,6) end
@@ -124,6 +194,9 @@ function app:SaveSettings()
             for i=1,6 do data.Slots[i]=math.clamp(math.floor(tonumber(cfg.Slots[i]) or 0),0,10) end
         else data[key]=cfg[key] end
     end
+    local key=applyMapPathPercent()
+    if key then mapPathPercents[key]=math.clamp(tonumber(cfg.PathPercent) or 50,0,100) end
+    data.MapPathPercents=mapPathPercents
     local upgrade=env.AAAutoUpgrade
     if upgrade and type(upgrade.Config)=="table" then
         local uc=upgrade.Config
@@ -153,7 +226,9 @@ function app:ClearSavedSettings()
     return true
 end
 local function statusText(msg)
-    app.CurrentStatus=tostring(msg)
+    msg=tostring(msg)
+    if app.CurrentStatus==msg then return end -- avoid repeated console/UI updates
+    app.CurrentStatus=msg
     log(msg)
     if app.StatusLabel and app.StatusLabel.Parent then app.StatusLabel.Text=msg end
     if app.StatusParagraph then pcall(function() app.StatusParagraph:SetDesc(app.CurrentStatus) end) end
@@ -286,6 +361,7 @@ function app:InspectRoad()
     return true
 end
 local function pathMidpoint(percentOverride)
+    applyMapPathPercent()
     -- Match InspectRoad: road may live under a nested map container.
     local road=WS:FindFirstChild("_road")
     if not road then
@@ -317,7 +393,49 @@ local function pathMidpoint(percentOverride)
         end
         return found
     end
-    local nodes=collect(road,false)
+    -- Prefer the actual "main" path segments over numbered ground/side tiles.
+    local function mainParts(container)
+        local result={}
+        for _,part in ipairs(container:GetChildren()) do
+            if part:IsA("BasePart") and part.Name:lower()=="main" then
+                table.insert(result,part)
+            end
+        end
+        return result
+    end
+    local main=mainParts(road)
+    if #main<2 then
+        for _,child in ipairs(road:GetChildren()) do
+            if child:IsA("Model") or child:IsA("Folder") then
+                local candidate=mainParts(child)
+                if #candidate>#main then main=candidate end
+            end
+        end
+    end
+    local nodes={}
+    if #main>=2 then
+        local bases=WS:FindFirstChild("_BASES")
+        local pve=bases and bases:FindFirstChild("pve")
+        local lanes=pve and pve:FindFirstChild("LANES")
+        local lane=lanes and (lanes:FindFirstChild("1") or lanes:GetChildren()[1])
+        local spawn=lane and lane:FindFirstChild("spawn")
+        if spawn and spawn:IsA("BasePart") then
+            local remaining=table.clone(main)
+            local previous=spawn.Position
+            while #remaining>0 do
+                local bestIndex,bestDistance=1,math.huge
+                for i,part in ipairs(remaining) do
+                    local distance=(part.Position-previous).Magnitude
+                    if distance<bestDistance then bestIndex,bestDistance=i,distance end
+                end
+                local part=table.remove(remaining,bestIndex)
+                table.insert(nodes,{Index=#nodes+1,Position=part.Position,Path=part:GetFullName()})
+                previous=part.Position
+            end
+            log("ROAD MAIN SEGMENTS",#nodes,"ordered from spawn")
+        end
+    end
+    if #nodes<2 then nodes=collect(road,false) end
     -- Fallback for maps whose road pieces are all named "main" rather than 1,2,3...
     if #nodes<2 then
         local parts={}
@@ -566,11 +684,18 @@ local function offsets()
     end)
     return list
 end
+local function slowAnchorPercent(index)
+    local base=math.clamp(tonumber(cfg.PathPercent) or 50,0,100)
+    -- Slow 1/2/3/4: main -10%, main, main +10%, main -20%.
+    local offsets={-10,0,10,-20}
+    local delta=offsets[index+1] or (index-1)*10
+    return math.clamp(base+delta,0,100)
+end
 local function unitPlacementCandidates(kind,existing,required,mainCenter,offsetsList)
     local list={}
     if kind=="Slow" then
         for index=existing,existing+required-1 do
-            local percent=math.min(100,index*10)
+            local percent=slowAnchorPercent(index)
             local anchor,err=pathMidpoint(percent)
             if not anchor then
                 warn("[AAAutoPlay] Slow anchor missing",percent,err)
@@ -686,7 +811,7 @@ function app:ShowTypePreview()
         if count>0 and (kind=="Slow" or kind=="Farm") then
             local percents={}
             if kind=="Slow" then
-                for i=0,count-1 do table.insert(percents,i*10) end
+                for i=0,count-1 do table.insert(percents,slowAnchorPercent(i)) end
             else
                 local base=math.clamp(tonumber(cfg.PathPercent) or 50,0,100)
                 percents={base-10,base+10}
@@ -741,13 +866,52 @@ function app:Stop()
     statusText("Stopped (in-flight request may finish)")
 end
 function app:Destroy()
-    self:Stop()
+    if self.SaveSettings then pcall(function() self:SaveSettings() end) end
+    if self.ControllerStop then self.ControllerStop() else self:Stop() end
     for _,conn in ipairs(self.Connections) do conn:Disconnect() end
     if self.Gui then self.Gui:Destroy() end
     if self.RayfieldWindow then pcall(function() self.RayfieldWindow:Unload() end) end
     if self.WindUIWindow then pcall(function() self.WindUIWindow:Destroy() end) end
 end
-function app:Run()
+-- Resolve the placement cost from the equipped unit's visual model.
+-- Unknown gameplay variants are not guessed; only cosmetic suffixes are removed.
+local placementData=nil
+local placementDataOK,placementDefinitions=pcall(function()
+    return require(RS.src.Data.Units)
+end)
+if placementDataOK and type(placementDefinitions)=="table" then placementData=placementDefinitions end
+local function placementPrice(slotNumber)
+    local gui=player:FindFirstChild("PlayerGui")
+    local group=gui and gui:FindFirstChild("spawn_units")
+    local frame=group and group:FindFirstChild(tostring(slotNumber),true)
+    local world=frame and frame:FindFirstChild("WorldModel",true)
+    local model=world and world:FindFirstChildOfClass("Model")
+    local id=model and model.Name
+    if not id or not placementData then return nil,id,"Unit data unavailable" end
+    local definition=placementData[id]
+    if not definition then
+        local cosmeticBase=id:gsub(":shiny",""):gsub(":golden","")
+        if cosmeticBase~=id then definition=placementData[cosmeticBase] end
+        if not definition then
+            local normalBase=cosmeticBase:gsub("_christmas$","")
+            if normalBase~=cosmeticBase then definition=placementData[normalBase] end
+        end
+    end
+    local base=definition and tonumber(definition.cost)
+    if not base or base<0 then return nil,id,"Unknown placement cost" end
+    local dataRoot=WS:FindFirstChild("_DATA")
+    local modifiers=dataRoot and dataRoot:FindFirstChild("LevelModifiers")
+    local scaleValue=modifiers and modifiers:FindFirstChild("player_cost_scale")
+    local scale=scaleValue and tonumber(scaleValue.Value)
+    if not scale or scale<0 then return nil,id,"Cost scale unavailable" end
+    return math.ceil(base*scale),id,nil
+end
+local function placementMoney()
+    local stats=player:FindFirstChild("_stats")
+    local resource=stats and stats:FindFirstChild("resource")
+    return resource and tonumber(resource.Value) or nil
+end
+function app:Run(activeWave)
     if self.Running then return end
     self.Running=true
     self.Cancelled=false
@@ -774,9 +938,7 @@ function app:Run()
     end
     if cfg.CountExistingUnits then self.Placed=existingPositions(folder) end
     local maxTotal=math.clamp(math.floor(tonumber(cfg.MaxTotalPlaced) or 12),1,50)
-    local maxAttempts=math.clamp(math.floor(tonumber(cfg.MaxTotalAttempts) or 120),1,300)
-    local perSlot=math.clamp(math.floor(tonumber(cfg.MaxAttemptsPerSlot) or 40),1,100)
-    local timeout=math.clamp(tonumber(cfg.VerifyTimeout) or 2,0.5,8)
+    local timeout=1 -- fixed maximum 1 second; do not use old persisted timeout
     local placementOrder={1,2,3,4,5,6}
     table.sort(placementOrder,function(a,b)
         local pa=math.clamp(math.floor(tonumber(cfg.UnitPriority[a]) or a),1,6)
@@ -786,11 +948,11 @@ function app:Run()
     end)
     log("Placement order",table.concat(placementOrder,","))
     for _,slotNumber in ipairs(placementOrder) do
-        if self.Cancelled or result.resourcePause or result.placed>=maxTotal or result.attempted>=maxAttempts then break end
+        if self.Cancelled or result.resourcePause or result.placed>=maxTotal then break end
         local want=math.clamp(math.floor(tonumber(cfg.Slots[slotNumber]) or 0),0,10)
         local slotResult={requested=want,placed=0,attempted=0,existing=0}
         result.slots[slotNumber]=slotResult
-        if want>0 then
+        if want>0 and (not activeWave or activeWave>=math.clamp(tonumber(cfg.StartWave[slotNumber]) or 1,1,100)) then
             local uuid=waitSlotUuid(slotNumber,cfg.UUIDWaitTimeout)
             if type(uuid)~="string" or uuid=="" then
                 if self.Cancelled then break end
@@ -807,6 +969,8 @@ function app:Run()
                 end
                 log("Slot target",slotNumber,"type",kind,"target",want,"existing",slotResult.existing,"needed",required)
                 for _,candidate in ipairs(candidates) do
+                    -- Recheck actual units before another request, including late spawns.
+                    if cfg.CountExistingUnits and countOwnedByUuid(folder,uuid)>=want then break end
                     if self.Cancelled or slotResult.placed>=required
                         or result.placed>=maxTotal then break end
                     local pos
@@ -814,6 +978,18 @@ function app:Run()
                         pos=findGround(candidate.Center,candidate.Offset)
                     end
                     if pos and farEnough(pos,self.Placed) then
+                        local price,unitId,reason=placementPrice(slotNumber)
+                        local money=placementMoney()
+                        if price==nil then
+                            statusText("Slot "..slotNumber.." | "..tostring(unitId or "?").." | "..tostring(reason).." - waiting")
+                            break -- No price: do not guess, retry on the next scheduler cycle.
+                        elseif money==nil then
+                            statusText("Slot "..slotNumber.." | Money unavailable - waiting")
+                            break
+                        elseif money<price then
+                            statusText("Slot "..slotNumber.." | WAITING FOR MONEY "..math.floor(money).."/"..price)
+                            break
+                        end
                         local before=ownedSnapshot(folder)
                         slotResult.attempted+=1;result.attempted+=1
                         statusText("Placing Slot "..slotNumber.." ("..kind..") "..slotResult.placed.."/"..required.." | point "..slotResult.attempted.."/"..#candidates)
@@ -829,18 +1005,8 @@ function app:Run()
                             if spawned or self.Cancelled then break end
                             task.wait(0.1)
                         until os.clock()>=deadline
-                        if not spawned and not self.Cancelled and ok and reply~=false then
-                            local extra=math.clamp(tonumber(cfg.LateVerifyTimeout) or 3,0,10)
-                            local lateDeadline=os.clock()+extra
-                            repeat
-                                spawned=matchingNewUnit(folder,before,uuid,pos)
-                                if spawned or self.Cancelled then break end
-                                task.wait(0.1)
-                            until os.clock()>=lateDeadline
-                            if not spawned and not self.Cancelled then
-                                warn("[AAAutoPlace] Placement not verified; checking next candidate",slotNumber,candidate.Percent,pos)
-                                statusText("Slot "..slotNumber.." not confirmed - trying next point")
-                            end
+                        if not spawned and not self.Cancelled then
+                            statusText("Slot "..slotNumber.." not confirmed within 1s - trying next point")
                         end
                         if spawned then
                             slotResult.placed+=1;result.placed+=1
@@ -851,7 +1017,7 @@ function app:Run()
                             log("NOT CONFIRMED",slotNumber,pos,"reply",tostring(reply))
                         end
                         if self.Cancelled then break end
-                        if not self.Cancelled then task.wait(math.max(0.15,cfg.RetryDelay)) end
+                        if not self.Cancelled then task.wait(0.5) end
                     end
                 end
             end
@@ -861,7 +1027,7 @@ function app:Run()
     for slot=1,6 do
         local target=math.clamp(math.floor(tonumber(cfg.Slots[slot]) or 0),0,10)
         local entry=result.slots[slot]
-        if target>0 and (not entry or entry.existing+entry.placed<target) then result.completed=false end
+        if target>0 and (not activeWave or activeWave>=math.clamp(tonumber(cfg.StartWave[slot]) or 1,1,100)) and (not entry or entry.existing+entry.placed<target) then result.completed=false end
     end
     self.Running=false
     local outcome = result.resourcePause and "PAUSED (resource)" or (self.Cancelled and "STOPPED" or (result.completed and "PLACEMENT COMPLETE" or "PLACEMENT INCOMPLETE"))
@@ -1120,6 +1286,152 @@ log("U2 loaded: PREVIEW default; set Config.Mode='LIVE' to allow verified upgrad
 
 end
 
+-- Embedded Auto Skill | per-slot support
+-- Kept in a lexical scope so its local app does not shadow Auto Place app.
+do
+-- AA Auto Skill | v0.1.0-test.2
+-- Experimental: read-only by default. Explicitly set Enabled=true to attempt casts.
+repeat task.wait() until game:IsLoaded()
+local Players=game:GetService("Players")
+local RS=game:GetService("ReplicatedStorage")
+local WS=game:GetService("Workspace")
+local player=Players.LocalPlayer
+local env=(type(getgenv)=="function" and getgenv()) or _G
+if env.AAAutoSkill and env.AAAutoSkill.Stop then env.AAAutoSkill:Stop() end
+local app={
+    Version="0.1.0-test.2",
+    Slots=cfg.AutoSkillSlots,
+    Enabled=false, -- opt in per slot; requires Auto Play running
+    Running=false,
+    Stopped=false,
+    ScanInterval=1,
+    MinRequestGap=1,
+    RequestFallbackGap=3,
+    PerUnit={},
+    Status="Idle",
+    Requests=0,
+    Verified=0,
+    NextCheck=0,
+}
+env.AAAutoSkill=app
+local function stat(folder,name)
+    local value=folder and folder:FindFirstChild(name)
+    return value and value:IsA("ValueBase") and value.Value or nil
+end
+local function slotUuids()
+    local found={}
+    local gui=player:FindFirstChild("PlayerGui")
+    local group=gui and gui:FindFirstChild("spawn_units")
+    if not group then return found end
+    for slot=1,6 do
+        if app.Slots[slot]==true then
+            local frame=group:FindFirstChild(tostring(slot),true)
+            local uuid=frame and frame:GetAttribute("_equipped_frame_unit_uuid")
+            if uuid then found[tostring(uuid)]=slot end
+        end
+    end
+    return found
+end
+local function myUnits()
+    local result={}
+    local folder=WS:FindFirstChild("_UNITS")
+    if not folder then return result end
+    local enabledUuids=slotUuids()
+    for _,unit in ipairs(folder:GetChildren()) do
+        local stats=unit:FindFirstChild("_stats")
+        local uuid=stat(stats,"uuid")
+        local slot=uuid and enabledUuids[tostring(uuid)]
+        if slot and stat(stats,"player")==player then
+            table.insert(result,{Model=unit,Slot=slot,Stats=stats,Skill=stat(stats,"active_attack"),
+                Cooldown=tonumber(stat(stats,"active_attack_cooldown")),
+                LastCast=tonumber(stat(stats,"last_active_cast")),
+                Queued=stat(stats,"active_queued_or_using")==true})
+        end
+    end
+    return result
+end
+function app:Inspect()
+    local units=myUnits()
+    print("[AAAutoSkill] Version",self.Version,"Owned",#units,"Mode",self.Enabled and "LIVE" or "PREVIEW")
+    for _,unit in ipairs(units) do
+        print("[AAAutoSkill] UNIT Slot",unit.Slot,unit.Model.Name,"Skill",tostring(unit.Skill),"Cooldown",tostring(unit.Cooldown),"LastCast",tostring(unit.LastCast),"Queued",unit.Queued)
+    end
+    self.Status=#units>0 and ("Detected "..#units.." enabled unit(s)") or "Waiting for enabled Slot unit"
+    return units
+end
+function app:Step()
+    local units=myUnits()
+    if #units==0 then self.Status="Waiting for enabled Slot units";return end
+    local remote=RS:FindFirstChild("endpoints")
+    remote=remote and remote:FindFirstChild("client_to_server")
+    remote=remote and remote:FindFirstChild("use_active_attack")
+    if not remote or not remote:IsA("RemoteFunction") then self.Status="Skill remote unavailable";return end
+    for _,u in ipairs(units) do
+        if self.Stopped then return end
+        if self.Slots[u.Slot]~=true then continue end
+        if type(u.Skill)~="string" or u.Skill=="" then
+            self.Status="Slot "..u.Slot.." has no active skill"
+        elseif u.Queued then
+            self.Status="Skill queued / casting: "..u.Model.Name
+        else
+            -- Read current cooldown each tick; never cache old upgraded cooldown.
+            local cd=math.max(1,tonumber(u.Cooldown) or 3)
+            local key=u.Model
+            local state=self.PerUnit[key]
+            if not state then
+                state={NextAt=0,LastCooldown=cd}
+                self.PerUnit[key]=state
+            elseif state.LastCooldown~=cd then
+                -- The upgrade changed CD: adjust outstanding wait from last attempt.
+                state.LastCooldown=cd
+                if state.LastAttempt then
+                    state.NextAt=state.LastAttempt+cd
+                end
+                print("[AAAutoSkill] Cooldown updated",u.Model.Name,cd)
+            end
+            if not self.Enabled then
+                self.Status="PREVIEW: "..u.Model.Name.." | "..u.Skill.." | live CD "..cd.."s"
+            elseif os.clock()<state.NextAt then
+                self.Status="Cooldown "..u.Model.Name.." | "..math.ceil(state.NextAt-os.clock()).."s | CD "..cd.."s"
+            else
+                -- Per-slot opt-in. Remote signature still experimental; observe result.
+                state.LastAttempt=os.clock()
+                state.NextAt=state.LastAttempt+math.max(cd,self.MinRequestGap)
+                local before=tonumber(stat(u.Stats,"last_request_active_cast"))
+                local ok,reply=pcall(function()return remote:InvokeServer(u.Model)end)
+                self.Requests+=1
+                task.wait(0.2)
+                local after=tonumber(stat(u.Stats,"last_request_active_cast"))
+                local verified=after and after~=before
+                if verified then
+                    self.Verified+=1
+                else
+                    -- Unconfirmed: continue observing without immediate spam.
+                    state.NextAt=math.max(state.NextAt,os.clock()+self.RequestFallbackGap)
+                end
+                self.Status=(verified and "Skill observed" or "Skill not confirmed").." | "..u.Model.Name.." | CD "..cd.."s"
+                print("[AAAutoSkill]",self.Status,"reply",tostring(reply),"remoteOK",ok)
+            end
+        end
+    end
+end
+function app:Start()
+    if self.Running then return end
+    self.Stopped=false
+    self.Running=true
+    task.spawn(function()
+        while not self.Stopped and env.AAAutoSkill==self do
+            local ok,err=pcall(function()self:Step()end)
+            if not ok then self.Status="Error: "..tostring(err);warn("[AAAutoSkill]",err) end
+            task.wait(math.max(0.25,tonumber(self.ScanInterval) or 0.5))
+        end
+        self.Running=false
+    end)
+end
+function app:Stop()self.Stopped=true;self.Running=false;self.Status="Stopped"end
+print("[AAAutoSkill] Module loaded",app.Version,"per-slot controls in Units tab")
+end -- Auto Skill local scope
+
 local function upgradeApp() return env.AAAutoUpgrade end
 if upgradeApp() then
     local uc=upgradeApp().Config
@@ -1138,43 +1450,105 @@ if upgradeApp() then
     uc.ReserveMoney=savedUpgrade and savedUpgrade.ReserveMoney or 0
     uc.AllowLowerPriorityWhenUnaffordable=savedUpgrade and savedUpgrade.AllowLowerPriorityWhenUnaffordable or false
 end
+local function readCurrentWave()
+    local gui=player:FindFirstChild("PlayerGui")
+    local waves=gui and gui:FindFirstChild("Waves")
+    local bar=waves and waves:FindFirstChild("HealthBar")
+    local value=bar and bar:FindFirstChild("WaveNumber")
+    local number=value and (value:IsA("ValueBase") and tonumber(value.Value) or (value:IsA("TextLabel") and tonumber(value.Text)))
+    if number and number>=0 then return math.floor(number) end
+    return nil
+end
+app.GetCurrentWave=readCurrentWave
+
 local autoPlayRunning=false
 local autoPlayCancelled=false
-local function startAutoPlay()
-    if autoPlayRunning or app.Running then return end
+local schedulerGeneration=0
+local startAutoPlay
+startAutoPlay=function()
+    if autoPlayRunning then return end
+    schedulerGeneration+=1
+    local myGeneration=schedulerGeneration
     autoPlayRunning=true
     autoPlayCancelled=false
+    app.AutoPlayState="RUNNING"
+    local skillApp=env.AAAutoSkill
+    if skillApp then skillApp.Slots=cfg.AutoSkillSlots;skillApp.Enabled=cfg.Mode=="LIVE" and table.find(cfg.AutoSkillSlots,true)~=nil;skillApp:Start() end
     task.spawn(function()
         local upgrade=upgradeApp()
-        if upgrade then upgrade:Stop() end
-        while not autoPlayCancelled do
-            local ok,err=xpcall(function() app:Run() end,debug.traceback)
-            if not ok then app.Running=false;warn("[AAAutoPlay] Placement error; retrying:",err) end
-            if autoPlayCancelled or app.Cancelled then break end
-            local result=app.LastResult
-            if ok and result and result.completed then
-                if cfg.Mode=="LIVE" and upgrade and upgrade.Config.Enabled then
-                    upgrade.Config.Mode="LIVE"
-                    log("SEQUENTIAL: placement targets met; starting upgrade")
-                    upgrade:Start()
+        local lastPhase=""
+        while not autoPlayCancelled and schedulerGeneration==myGeneration and env.AAAutoPlace==app do
+            local wave=readCurrentWave()
+            app.CurrentWave=wave
+            if wave==nil then
+                if upgrade and upgrade.Running then upgrade:Stop() end
+                app.AutoPlayState="WAITING_FOR_WAVE"
+                statusText("WAITING FOR WAVE DATA (Waves.HealthBar.WaveNumber)")
+                task.wait(1)
+            else
+                local units=WS:FindFirstChild("_UNITS")
+                local due=false
+                local nextWave=nil
+                for slot=1,6 do
+                    local target=math.clamp(math.floor(tonumber(cfg.Slots[slot]) or 0),0,10)
+                    if target>0 then
+                        local startWave=math.clamp(math.floor(tonumber(cfg.StartWave[slot]) or 1),1,100)
+                        if wave<startWave then
+                            if not nextWave or startWave<nextWave then nextWave=startWave end
+                        else
+                            local uuid=getSlotUuid(slot)
+                            if not uuid or not units or countOwnedByUuid(units,uuid)<target then due=true end
+                        end
+                    end
                 end
-                break
-            end
-            statusText("Placement incomplete / map not ready - retrying in 0.5s (Stop to cancel)")
-            for _=1,5 do
-                if autoPlayCancelled then break end
-                task.wait(0.1)
+                app.NextPlacementWave=nextWave
+                if due then
+                    app.AutoPlayState="PLACING"
+                    if upgrade and upgrade.Running then upgrade:Stop() end
+                    if lastPhase~="PLACE" then log("WAVE",wave,"phase PLACE") end
+                    lastPhase="PLACE"
+                    local ok,err=xpcall(function() app:Run(wave) end,debug.traceback)
+                    if not ok then app.Running=false;warn("[AAAutoPlay] Placement error; retrying:",err) end
+                    if not autoPlayCancelled then task.wait(0.5) end
+                else
+                    app.AutoPlayState="UPGRADING_OR_WAITING"
+                    if lastPhase~="UPGRADE" then
+                        log("WAVE",wave,"phase UPGRADE",nextWave and ("next slot unlock "..nextWave) or "all unlocked")
+                    end
+                    lastPhase="UPGRADE"
+                    if cfg.Mode=="LIVE" and upgrade and upgrade.Config.Enabled then
+                        if not upgrade.Running then
+                            upgrade.Config.Mode="LIVE"
+                            upgrade:Start()
+                        end
+                        statusText("Wave "..wave.." | all due units placed | AUTO UPGRADE"..(nextWave and (" | next placement Wave "..nextWave) or ""))
+                    else
+                        statusText("Wave "..wave.." | all due units placed | waiting"..(nextWave and (" for Wave "..nextWave) or ""))
+                    end
+                    task.wait(1)
+                end
             end
         end
+        if upgrade and upgrade.Running then upgrade:Stop() end
         autoPlayRunning=false
+        app.AutoPlayState="STOPPED"
+        if cfg.AutoPlayEnabled==true and schedulerGeneration~=myGeneration and env.AAAutoPlace==app then
+            task.defer(startAutoPlay) -- restart only after old scheduler exits
+        end
     end)
 end
 local function stopAutoPlay()
+    app.AutoPlayState="STOPPED"
+    schedulerGeneration+=1
     autoPlayCancelled=true
     app:Stop()
+    local skillApp=env.AAAutoSkill
+    if skillApp then skillApp:Stop() end
     local upgrade=upgradeApp()
     if upgrade then upgrade:Stop() end
 end
+
+app.ControllerStop=stopAutoPlay
 
 -- Native compact UI: independent from remote UI libraries.
 local function buildWindUI()
@@ -1190,10 +1564,15 @@ local function buildWindUI()
     dashboard:Paragraph({Title="Sequential / LIVE",Desc="Place all units first, then begin Auto Upgrade."})
     app.StatusParagraph=dashboard:Paragraph({Title="Auto Play Status",Desc=app.CurrentStatus or "Idle - ready to start"})
     app.UpgradeParagraph=dashboard:Paragraph({Title="Auto Upgrade",Desc="Idle | Sequential mode"})
+    app.WaveParagraph=dashboard:Paragraph({Title="Wave Scheduler",Desc="Waiting for Wave data"})
+    app.SkillParagraph=dashboard:Paragraph({Title="Auto Skill (Selected Slots)",Desc="Idle"})
     task.spawn(function()
         local last=""
         while app.WindUIWindow==window and env.AAAutoPlace==app do
             local upgrade=upgradeApp()
+            local sk=env.AAAutoSkill
+            if sk then pcall(function() app.SkillParagraph:SetDesc((sk.Enabled and "LIVE | " or "PREVIEW | ")..tostring(sk.Status).." | Casts "..tostring(sk.Verified).."/"..tostring(sk.Requests)) end) end
+            pcall(function() app.WaveParagraph:SetDesc("Wave "..tostring(app.CurrentWave or "?").." | Next Placement "..tostring(app.NextPlacementWave or "-")) end)
             local details=upgrade and (tostring(upgrade.Status or "Idle").." | Verified "..tostring(upgrade.Verified or 0).." | Requests "..tostring(upgrade.Requests or 0).."/"..tostring(upgrade.Config.MaxUpgradesPerRun)) or "Unavailable"
             if details~=last then
                 last=details
@@ -1202,8 +1581,11 @@ local function buildWindUI()
             task.wait(0.5)
         end
     end)
-    dashboard:Button({Title="START AUTO PLAY",Icon="play",Callback=startAutoPlay})
-    dashboard:Button({Title="STOP ALL",Icon="square",Callback=stopAutoPlay})
+    dashboard:Toggle({Title="Auto Play",Value=cfg.AutoPlayEnabled==true,Callback=function(v)
+        cfg.AutoPlayEnabled=v==true
+        if cfg.AutoPlayEnabled then startAutoPlay() else stopAutoPlay() end
+        app:SaveSettings()
+    end})
     local previewToggle
     previewToggle=dashboard:Toggle({Title="Show Placement Preview",Value=cfg.ShowPreview,Callback=function(v)app:SetPreview(v)end})
     dashboard:Button({Title="Refresh Preview",Callback=function()app:RefreshPreview()end})
@@ -1212,13 +1594,15 @@ local function buildWindUI()
     unitTab:Paragraph({Title="Per-slot configuration",Desc="Select a slot from the dropdown below. Changes affect the selected slot only."})
     local selected=1
     local changing=false
-    local typeControl,countControl,priorityControl,enabledControl,targetControl
+    local typeControl,countControl,priorityControl,enabledControl,targetControl,waveControl,skillControl
     local function syncControls()
         changing=true
         local upgrade=upgradeApp()
         typeControl:Select(cfg.UnitTypes[selected] or "Damage")
         countControl:Set(cfg.Slots[selected] or 0)
         priorityControl:Set(cfg.UnitPriority[selected] or selected)
+        waveControl:Set(cfg.StartWave[selected] or 1)
+        if skillControl then skillControl:Set(cfg.AutoSkillSlots[selected]==true) end
         enabledControl:Set(upgrade and upgrade.Config.Slots[selected]==true or false)
         targetControl:Set(upgrade and upgrade.Config.TargetLevel[selected] or -1)
         changing=false
@@ -1233,6 +1617,9 @@ local function buildWindUI()
     countControl=unitTab:Slider({Title="Placement Count",Step=1,Value={Min=0,Max=10,Default=cfg.Slots[1] or 0},Callback=function(v)
         if not changing then cfg.Slots[selected]=math.clamp(math.floor(v),0,10)end
     end})
+    waveControl=unitTab:Slider({Title="Start Placement at Wave",Step=1,Value={Min=1,Max=100,Default=cfg.StartWave[1] or 1},Callback=function(v)
+        if not changing then cfg.StartWave[selected]=math.clamp(math.floor(v),1,100) end
+    end})
     priorityControl=unitTab:Slider({Title="Priority (1 first)",Step=1,Value={Min=1,Max=6,Default=cfg.UnitPriority[1] or 1},Callback=function(v)
         if not changing then
             cfg.UnitPriority[selected]=math.clamp(math.floor(v),1,6)
@@ -1246,16 +1633,42 @@ local function buildWindUI()
     targetControl=unitTab:Slider({Title="Upgrade Target (-1 = MAX)",Step=1,Value={Min=-1,Max=20,Default=u and u.Config.TargetLevel[1] or -1},Callback=function(v)
         if not changing then local up=upgradeApp();if up then up.Config.TargetLevel[selected]=math.clamp(math.floor(v),-1,20)end end
     end})
+    skillControl=unitTab:Toggle({Title="Auto Skill for this Slot",Value=cfg.AutoSkillSlots[1]==true,Callback=function(v)
+        if not changing then
+            cfg.AutoSkillSlots[selected]=v
+            local sk=env.AAAutoSkill
+            if sk then sk.Enabled=autoPlayRunning and cfg.Mode=="LIVE" and table.find(cfg.AutoSkillSlots,true)~=nil end
+        end
+    end})
     local placement=window:Tab({Title="Placement",Icon="map-pin"})
     placement:Dropdown({Title="Center Mode",Values={"PATH_MIDPOINT","MOUSE","PLAYER","POSITION"},Value=cfg.CenterMode,Callback=function(v)cfg.CenterMode=v end})
-    placement:Slider({Title="Main Path Position (%)",Step=5,Value={Min=0,Max=100,Default=cfg.PathPercent},Callback=function(v)cfg.PathPercent=v end})
+    local pathSlider
+    local mapLabel=placement:Paragraph({Title="Current Stage",Desc=cfg.CurrentMapKey or "Waiting for map data"})
+    pathSlider=placement:Slider({Title="Main Path Position (%) - This Stage",Step=5,Value={Min=0,Max=100,Default=cfg.PathPercent},Callback=function(v)
+        cfg.PathPercent=math.clamp(tonumber(v) or 50,0,100)
+        if cfg.CurrentMapKey then mapPathPercents[cfg.CurrentMapKey]=cfg.PathPercent end
+    end})
+    task.spawn(function()
+        local shownKey=cfg.CurrentMapKey
+        while app.WindUIWindow==window and env.AAAutoPlace==app do
+            local key=applyMapPathPercent()
+            if key and key~=shownKey then
+                shownKey=key
+                pcall(function() pathSlider:Set(cfg.PathPercent) end)
+                pcall(function() mapLabel:SetDesc(key) end)
+                log("MAP PROFILE",key,"Main Path",cfg.PathPercent.."%")
+            end
+            task.wait(3)
+        end
+    end)
     placement:Slider({Title="Radius (studs)",Step=1,Value={Min=1,Max=45,Default=cfg.Radius},Callback=function(v)cfg.Radius=v end})
     placement:Slider({Title="Grid Step",Step=1,Value={Min=1,Max=12,Default=cfg.GridStep},Callback=function(v)cfg.GridStep=v end})
     placement:Button({Title="Refresh Map Preview",Callback=function()app:RefreshPreview()end})
     placement:Button({Title="Inspect Road (Console)",Callback=function()app:InspectRoad()end})
     local settings=window:Tab({Title="Settings",Icon="settings"})
     settings:Toggle({Title="Enable Auto Upgrade",Value=u and u.Config.Enabled==true or false,Callback=function(v)local up=upgradeApp();if up then up.Config.Enabled=v end end})
-    settings:Paragraph({Title="Settings file",Desc="AAAutoPlaceSettings.json | Reset by deleting file manually. Upgrade limit: 99."})
+
+    settings:Paragraph({Title="Auto Save",Desc="Changes save automatically after 1.5 seconds to AAAutoPlaceSettings.json. SAVE SETTINGS is also available."})
     settings:Button({Title="SAVE SETTINGS",Icon="save",Callback=function()
         local ok=app:SaveSettings()
         WindUI:Notify({Title=ok and "Saved" or "Save Failed",Content=ok and "Auto Play settings saved" or "Check console",Duration=3})
@@ -1266,10 +1679,54 @@ end
 local uiOk,uiErr=pcall(buildWindUI)
 if not uiOk then warn("[AAAutoPlay] WindUI failed:",uiErr) end
 log("Auto Play loaded; version",SCRIPT_VERSION,"mode",cfg.Mode,"slots",table.concat(cfg.Slots,","))
-if override.AutoStart==true and cfg.Mode=="LIVE" then
+-- Auto-save watcher: tracks all persisted settings, per-stage path positions,
+-- and embedded upgrade settings. Debounced to avoid writing every slider step.
+local function settingsFingerprint()
+    local data={}
+    for _,key in ipairs(persistKeys) do data[key]=cfg[key] end
+    data.MapPathPercents=mapPathPercents
+    local upgrade=env.AAAutoUpgrade
+    if upgrade and upgrade.Config then
+        local uc=upgrade.Config
+        data.Upgrade={
+            Enabled=uc.Enabled,Slots=uc.Slots,TargetLevel=uc.TargetLevel,
+            Priority=uc.Priority,CostDiscounts=uc.CostDiscounts,
+            ReserveMoney=uc.ReserveMoney,
+            AllowLowerPriorityWhenUnaffordable=uc.AllowLowerPriorityWhenUnaffordable,
+        }
+    end
+    return HttpService:JSONEncode(data)
+end
+local originalFingerprint=settingsFingerprint()
+task.spawn(function()
+    local lastObserved=originalFingerprint
+    local lastSaved=originalFingerprint
+    local changedAt=nil
+    while env.AAAutoPlace==app do
+        local ok,fingerprint=pcall(settingsFingerprint)
+        if ok then
+            if fingerprint~=lastObserved then
+                lastObserved=fingerprint
+                changedAt=os.clock()
+            end
+            if changedAt and fingerprint~=lastSaved and os.clock()-changedAt>=1.5 then
+                if app:SaveSettings() then
+                    lastSaved=fingerprint
+                    changedAt=nil
+                    log("SETTINGS AUTO SAVED")
+                else
+                    changedAt=os.clock() -- retry later without spamming each tick
+                end
+            end
+            if fingerprint==lastSaved then changedAt=nil end
+        end
+        task.wait(0.5)
+    end
+end)
+if (cfg.AutoPlayEnabled==true or override.AutoStart==true) and cfg.Mode=="LIVE" then
     task.defer(function()
-        while not app.Cancelled do
-            if app.Cancelled then return end
+        app.AutoPlayState="WAITING_FOR_MAP"
+        while env.AAAutoPlace==app and not app.Cancelled and (cfg.AutoPlayEnabled==true or override.AutoStart==true) do
             local map=WS:FindFirstChild("_MAP_CONFIG")
             local bases=WS:FindFirstChild("_BASES")
             local units=WS:FindFirstChild("_UNITS")
