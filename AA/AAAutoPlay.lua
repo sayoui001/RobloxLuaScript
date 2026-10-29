@@ -1,6 +1,6 @@
 -- AA AutoPlace Phase 1 | single-file, slots 1-6, bounded real placement
 -- Default PREVIEW: only LIVE mode sends spawn_unit requests.
-local SCRIPT_VERSION="1.3.0-test.15"
+local SCRIPT_VERSION="1.3.0-test.18"
 repeat task.wait() until game:IsLoaded()
 local Players=game:GetService("Players")
 local RS=game:GetService("ReplicatedStorage")
@@ -15,6 +15,7 @@ local defaults={
     CenterMode="PATH_MIDPOINT", -- PATH_MIDPOINT (default), MOUSE, PLAYER, POSITION
     CenterPosition=nil,
     PathPercent=50, -- 0=start of road, 100=end; defaults to halfway
+    PlacementSide="LEFT", -- LEFT or RIGHT, relative to enemy travel direction
     Radius=12, GridStep=3, UnitSpacing=3,
     UUIDWaitTimeout=15, ScanHeight=35,
     MaxHeightDifference=8, MinNormalY=0.85,
@@ -79,6 +80,25 @@ local function readSettings()
             safe[key]=data[key]
         end
     end
+    if type(data.MapPlacementAnchors)=="table" then
+        safe.MapPlacementAnchors={}
+        for key,coords in pairs(data.MapPlacementAnchors) do
+            if type(key)=="string" and #key<=180 and type(coords)=="table" then
+                local x,y,z=tonumber(coords[1]),tonumber(coords[2]),tonumber(coords[3])
+                if x and y and z and x==x and y==y and z==z and math.abs(x)<100000 and math.abs(y)<100000 and math.abs(z)<100000 then
+                    safe.MapPlacementAnchors[key]={x,y,z}
+                end
+            end
+        end
+    end
+    if type(data.MapPlacementSides)=="table" then
+        safe.MapPlacementSides={}
+        for key,value in pairs(data.MapPlacementSides) do
+            if type(key)=="string" and #key<=180 and (value=="LEFT" or value=="RIGHT") then
+                safe.MapPlacementSides[key]=value
+            end
+        end
+    end
     if type(data.MapPathPercents)=="table" then
         safe.MapPathPercents={}
         for key,value in pairs(data.MapPathPercents) do
@@ -122,6 +142,8 @@ for k,v in pairs(defaults) do
 end
 cfg.Mode=override.Mode=="PREVIEW" and "PREVIEW" or "LIVE"
 local mapPathPercents=saved.MapPathPercents or {}
+local mapPlacementSides=saved.MapPlacementSides or {}
+local mapPlacementAnchors=saved.MapPlacementAnchors or {}
 local function identifyMap()
     local mc=WS:FindFirstChild("_MAP_CONFIG")
     if mc then
@@ -160,6 +182,7 @@ local function applyMapPathPercent()
     if cfg.CurrentMapKey~=key then
         cfg.CurrentMapKey=key
         cfg.PathPercent=math.clamp(tonumber(mapPathPercents[key]) or 50,0,100)
+        cfg.PlacementSide=mapPlacementSides[key] or "LEFT"
         if type(override.PathPercent)=="number" then cfg.PathPercent=math.clamp(override.PathPercent,0,100) end
     end
     return key
@@ -197,6 +220,8 @@ function app:SaveSettings()
     local key=applyMapPathPercent()
     if key then mapPathPercents[key]=math.clamp(tonumber(cfg.PathPercent) or 50,0,100) end
     data.MapPathPercents=mapPathPercents
+    data.MapPlacementSides=mapPlacementSides
+    data.MapPlacementAnchors=mapPlacementAnchors
     local upgrade=env.AAAutoUpgrade
     if upgrade and type(upgrade.Config)=="table" then
         local uc=upgrade.Config
@@ -393,48 +418,84 @@ local function pathMidpoint(percentOverride)
         end
         return found
     end
-    -- Prefer the actual "main" path segments over numbered ground/side tiles.
-    local function mainParts(container)
-        local result={}
-        for _,part in ipairs(container:GetChildren()) do
-            if part:IsA("BasePart") and part.Name:lower()=="main" then
-                table.insert(result,part)
-            end
-        end
-        return result
-    end
-    local main=mainParts(road)
-    if #main<2 then
-        for _,child in ipairs(road:GetChildren()) do
-            if child:IsA("Model") or child:IsA("Folder") then
-                local candidate=mainParts(child)
-                if #candidate>#main then main=candidate end
-            end
-        end
-    end
+    -- Choose the connected road group nearest the enemy spawn, not the largest "main" group.
     local nodes={}
-    if #main>=2 then
-        local bases=WS:FindFirstChild("_BASES")
-        local pve=bases and bases:FindFirstChild("pve")
-        local lanes=pve and pve:FindFirstChild("LANES")
-        local lane=lanes and (lanes:FindFirstChild("1") or lanes:GetChildren()[1])
-        local spawn=lane and lane:FindFirstChild("spawn")
-        if spawn and spawn:IsA("BasePart") then
-            local remaining=table.clone(main)
-            local previous=spawn.Position
-            while #remaining>0 do
-                local bestIndex,bestDistance=1,math.huge
-                for i,part in ipairs(remaining) do
-                    local distance=(part.Position-previous).Magnitude
-                    if distance<bestDistance then bestIndex,bestDistance=i,distance end
+    local bases=WS:FindFirstChild("_BASES")
+    local pve=bases and bases:FindFirstChild("pve")
+    local lanes=pve and pve:FindFirstChild("LANES")
+    local spawnParts={}
+    if lanes then
+        for _,lane in ipairs(lanes:GetChildren()) do
+            local spawn=lane:FindFirstChild("spawn")
+            if spawn and spawn:IsA("BasePart") then table.insert(spawnParts,spawn) end
+        end
+    end
+    if #spawnParts>0 then
+        local groups={}
+        local function addGroup(parts,label)
+            if #parts<2 then return end
+            local remaining=table.clone(parts)
+            local ordered={}
+            local previous=nil
+            local bestStart,bestSpawnDist=nil,math.huge
+            for _,part in ipairs(remaining) do
+                for _,spawn in ipairs(spawnParts) do
+                    local d=(part.Position-spawn.Position).Magnitude
+                    if d<bestSpawnDist then bestStart,bestSpawnDist=part,d end
                 end
-                local part=table.remove(remaining,bestIndex)
-                table.insert(nodes,{Index=#nodes+1,Position=part.Position,Path=part:GetFullName()})
+            end
+            if not bestStart then return end
+            previous=bestStart.Position
+            table.insert(ordered,bestStart)
+            for i,part in ipairs(remaining) do if part==bestStart then table.remove(remaining,i);break end end
+            local maxJump=0
+            while #remaining>0 do
+                local selected,closest=1,math.huge
+                for i,part in ipairs(remaining) do
+                    local d=(part.Position-previous).Magnitude
+                    if d<closest then selected,closest=i,d end
+                end
+                maxJump=math.max(maxJump,closest)
+                local part=table.remove(remaining,selected)
+                table.insert(ordered,part)
                 previous=part.Position
             end
-            log("ROAD MAIN SEGMENTS",#nodes,"ordered from spawn")
+            -- A group with disconnected pieces is not a dependable path.
+            if maxJump>60 then return end
+            table.insert(groups,{Parts=ordered,Name=label,Distance=bestSpawnDist,Jump=maxJump})
+        end
+        local function collectMain(container)
+            local parts={}
+            for _,part in ipairs(container:GetChildren()) do
+                if part:IsA("BasePart") and part.Name:lower()=="main" then table.insert(parts,part) end
+            end
+            return parts
+        end
+        addGroup(collectMain(road),road:GetFullName())
+        for _,child in ipairs(road:GetDescendants()) do
+            if child:IsA("Folder") or child:IsA("Model") then
+                addGroup(collectMain(child),child:GetFullName())
+            end
+        end
+        table.sort(groups,function(a,b)
+            if math.abs(a.Distance-b.Distance)>1 then return a.Distance<b.Distance end
+            if a.Jump~=b.Jump then return a.Jump<b.Jump end
+            return a.Name<b.Name
+        end)
+        if #groups>0 then
+            local chosen=groups[1]
+            -- Avoid selecting a nearby decorative route when equally plausible paths exist.
+            if #groups==1 or groups[2].Distance-chosen.Distance>3 then
+                for i,part in ipairs(chosen.Parts) do
+                    table.insert(nodes,{Index=i,Position=part.Position,Path=part:GetFullName()})
+                end
+                log("ROAD SPAWN-ANCHORED",chosen.Name,"nodes",#nodes,"spawn distance",chosen.Distance,"max jump",chosen.Jump)
+            else
+                return nil,"ambiguous road groups near enemy spawn; set manual center"
+            end
         end
     end
+    if #spawnParts>0 and #nodes<2 then return nil,"no continuous main road group near enemy spawn; set manual center" end
     if #nodes<2 then nodes=collect(road,false) end
     -- Fallback for maps whose road pieces are all named "main" rather than 1,2,3...
     if #nodes<2 then
@@ -644,7 +705,14 @@ local function pathMidpoint(percentOverride)
     end
     return nil,"path position calculation failed"
 end
+local function savedPlacementAnchor()
+    local coords=cfg.CurrentMapKey and mapPlacementAnchors[cfg.CurrentMapKey]
+    if type(coords)=="table" and #coords==3 then return Vector3.new(coords[1],coords[2],coords[3]) end
+    return nil
+end
 local function centerPosition()
+    local manual=savedPlacementAnchor()
+    if manual then return manual end
     if cfg.CenterMode=="PATH_MIDPOINT" then
         local position,err,count,length,fromNode,toNode=pathMidpoint()
         if position then
@@ -693,6 +761,11 @@ local function slowAnchorPercent(index)
 end
 local function unitPlacementCandidates(kind,existing,required,mainCenter,offsetsList)
     local list={}
+    local manual=savedPlacementAnchor()
+    if manual then
+        for _,offset in ipairs(offsetsList) do table.insert(list,{Center=manual,Offset=offset,Ordinal=0}) end
+        return list
+    end
     if kind=="Slow" then
         for index=existing,existing+required-1 do
             local percent=slowAnchorPercent(index)
@@ -727,6 +800,21 @@ local function unitPlacementCandidates(kind,existing,required,mainCenter,offsets
     end
     return list
 end
+local placementDirectionCache={Key=nil,Tangent=nil}
+local function placementDirection()
+    local key=tostring(cfg.CurrentMapKey)..":"..tostring(cfg.PathPercent)
+    if placementDirectionCache.Key==key and placementDirectionCache.Tangent then return placementDirectionCache.Tangent end
+    placementDirectionCache.Key=key
+    placementDirectionCache.Tangent=nil
+    local pct=math.clamp(tonumber(cfg.PathPercent) or 50,2,98)
+    local a=pathMidpoint(pct-2)
+    local b=pathMidpoint(pct+2)
+    if a and b then
+        local delta=Vector3.new(b.X-a.X,0,b.Z-a.Z)
+        if delta.Magnitude>0.01 then placementDirectionCache.Tangent=delta.Unit end
+    end
+    return placementDirectionCache.Tangent
+end
 local function findGround(center,offset)
     local params=RaycastParams.new()
     params.FilterType=Enum.RaycastFilterType.Exclude
@@ -734,8 +822,20 @@ local function findGround(center,offset)
     if player.Character then table.insert(ignore,player.Character) end
     params.FilterDescendantsInstances=ignore
     local point=center+Vector3.new(offset.dx,0,offset.dz)
+    if cfg.CenterMode=="PATH_MIDPOINT" and not savedPlacementAnchor() then
+        local tangent=placementDirection()
+        if not tangent then return nil end
+        if tangent then
+            local left=Vector3.new(-tangent.Z,0,tangent.X)
+            local sign=cfg.PlacementSide=="RIGHT" and -1 or 1
+            local lateral=(math.abs(offset.dx)+math.max(2,tonumber(cfg.GridStep) or 3))*sign
+            point=center+left*lateral+tangent*offset.dz
+        end
+    end
     local ray=WS:Raycast(point+Vector3.new(0,cfg.ScanHeight,0),Vector3.new(0,-(cfg.ScanHeight*2+20),0),params)
     if not ray or ray.Normal.Y<cfg.MinNormalY then return nil end
+    local road=WS:FindFirstChild("_road")
+    if road and ray.Instance and ray.Instance:IsDescendantOf(road) then return nil end
     if math.abs(ray.Position.Y-center.Y)>cfg.MaxHeightDifference then return nil end
     return ray.Position
 end
@@ -1643,7 +1743,36 @@ local function buildWindUI()
     local placement=window:Tab({Title="Placement",Icon="map-pin"})
     placement:Dropdown({Title="Center Mode",Values={"PATH_MIDPOINT","MOUSE","PLAYER","POSITION"},Value=cfg.CenterMode,Callback=function(v)cfg.CenterMode=v end})
     local pathSlider
+    local sideControl
+    sideControl=placement:Dropdown({Title="Placement Side - This Stage",Values={"LEFT","RIGHT"},Value=cfg.PlacementSide,Callback=function(v)
+        if v=="LEFT" or v=="RIGHT" then
+            cfg.PlacementSide=v
+            if cfg.CurrentMapKey then mapPlacementSides[cfg.CurrentMapKey]=v end
+            app:RefreshPreview()
+        end
+    end})
     local mapLabel=placement:Paragraph({Title="Current Stage",Desc=cfg.CurrentMapKey or "Waiting for map data"})
+    placement:Paragraph({Title="Manual Placement Area",Desc="Set a verified buildable location with mouse. Saved separately per stage; overrides decorative road anchoring for all unit types."})
+    placement:Button({Title="Use Mouse Position as Placement Center",Callback=function()
+        local key=applyMapPathPercent()
+        local mouse=player:GetMouse()
+        local hit=mouse and mouse.Target
+        if not key or not hit or not mouse.Hit then
+            statusText("Manual placement: point mouse at buildable ground on a loaded stage")
+            return
+        end
+        local point=mouse.Hit.Position
+        mapPlacementAnchors[key]={point.X,point.Y,point.Z}
+        app:SaveSettings()
+        app:RefreshPreview()
+        statusText("Manual placement center saved for this stage")
+    end})
+    placement:Button({Title="Clear Manual Placement Center",Callback=function()
+        local key=applyMapPathPercent()
+        if key then mapPlacementAnchors[key]=nil;app:SaveSettings() end
+        app:RefreshPreview()
+        statusText("Using automatic road-based placement again")
+    end})
     pathSlider=placement:Slider({Title="Main Path Position (%) - This Stage",Step=5,Value={Min=0,Max=100,Default=cfg.PathPercent},Callback=function(v)
         cfg.PathPercent=math.clamp(tonumber(v) or 50,0,100)
         if cfg.CurrentMapKey then mapPathPercents[cfg.CurrentMapKey]=cfg.PathPercent end
@@ -1655,6 +1784,7 @@ local function buildWindUI()
             if key and key~=shownKey then
                 shownKey=key
                 pcall(function() pathSlider:Set(cfg.PathPercent) end)
+                pcall(function() sideControl:Select(cfg.PlacementSide) end)
                 pcall(function() mapLabel:SetDesc(key) end)
                 log("MAP PROFILE",key,"Main Path",cfg.PathPercent.."%")
             end
@@ -1685,6 +1815,8 @@ local function settingsFingerprint()
     local data={}
     for _,key in ipairs(persistKeys) do data[key]=cfg[key] end
     data.MapPathPercents=mapPathPercents
+    data.MapPlacementSides=mapPlacementSides
+    data.MapPlacementAnchors=mapPlacementAnchors
     local upgrade=env.AAAutoUpgrade
     if upgrade and upgrade.Config then
         local uc=upgrade.Config
