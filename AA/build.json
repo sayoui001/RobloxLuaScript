@@ -1,0 +1,42 @@
+{
+  "entry": "src/Main.luau",
+  "modules": [
+    {
+      "name": "Core.RoadDetector",
+      "path": "src/Core/RoadDetector.luau"
+    },
+    {
+      "name": "Core.PlacementEngine",
+      "path": "src/Core/PlacementEngine.luau"
+    },
+    {
+      "name": "Core.PlacementVerifier",
+      "path": "src/Core/PlacementVerifier.luau"
+    },
+    {
+      "name": "Features.AutoUpgrade",
+      "path": "src/Features/AutoUpgrade.luau"
+    },
+    {
+      "name": "Features.AutoSkill",
+      "path": "src/Features/AutoSkill.luau"
+    },
+    {
+      "name": "Core.Settings",
+      "path": "src/Core/Settings.luau"
+    },
+    {
+      "name": "Core.SettingsPersistence",
+      "path": "src/Core/SettingsPersistence.luau"
+    },
+    {
+      "name": "UI.MainWindow",
+      "path": "src/UI/MainWindow.luau"
+    },
+    {
+      "name": "Features.AutoBuff",
+      "path": "src/Features/AutoBuff.luau"
+    }
+  ],
+  "output": "dist/AAAutoPlay.lua"
+}
