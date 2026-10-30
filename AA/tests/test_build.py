@@ -137,5 +137,12 @@ class BuildTests(unittest.TestCase):
         self.assertIn('Title="Refresh Slow Preview"', ui)
         self.assertIn('cfg.ShowSlowPreview=enabled==true', ui)
 
+    def test_window_size_recovers_from_minimized_viewport(self):
+        ui=(ROOT / "src/UI/MainWindow.luau").read_text(encoding="utf-8")
+        self.assertIn('local startedSmall=', ui)
+        self.assertIn('viewport.X>=720 and viewport.Y>=550', ui)
+        self.assertIn('window:SetSize(UDim2.fromOffset(585,470))', ui)
+        self.assertIn('app.WindUIWindow==window and env.AAAutoPlace==app', ui)
+
 if __name__ == "__main__":
     unittest.main()

@@ -26,6 +26,23 @@ local function buildWindUI()
         OpenButton={Title="Open AA Auto Play",Enabled=true,Draggable=true,OnlyMobile=false,Scale=0.65},
     })
     app.WindUIWindow=window
+    -- A minimized Roblox window may report a tiny viewport when WindUI is created.
+    -- Apply the intended size once after the viewport becomes large enough.
+    task.spawn(function()
+        local camera=workspace.CurrentCamera
+        local viewport=camera and camera.ViewportSize
+        local startedSmall=not viewport or viewport.X<720 or viewport.Y<550
+        if not startedSmall then return end
+        while app.WindUIWindow==window and env.AAAutoPlace==app do
+            camera=workspace.CurrentCamera
+            viewport=camera and camera.ViewportSize
+            if viewport and viewport.X>=720 and viewport.Y>=550 then
+                pcall(function() window:SetSize(UDim2.fromOffset(585,470)) end)
+                break
+            end
+            task.wait(0.5)
+        end
+    end)
     local dashboard=window:Tab({Title="Dashboard",Icon="layout-dashboard"})
     dashboard:Paragraph({Title="Sequential / LIVE",Desc="Place all units first, then begin Auto Upgrade."})
     app.StatusParagraph=dashboard:Paragraph({Title="Auto Play Status",Desc=app.CurrentStatus or "Idle - ready to start"})
